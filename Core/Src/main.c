@@ -22,7 +22,7 @@
 
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
-
+#include "io_control.h"
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -100,13 +100,14 @@ int main(void)
   MX_I2C2_Init();
   MX_USART1_UART_Init();
   /* USER CODE BEGIN 2 */
-
+  IO_Control_Init();
   /* USER CODE END 2 */
 
   /* Infinite loop */
   /* USER CODE BEGIN WHILE */
   while (1)
   {
+    IO_Control_Process();
     /* USER CODE END WHILE */
 
     /* USER CODE BEGIN 3 */
@@ -389,7 +390,7 @@ static void MX_GPIO_Init(void)
   /*Configure GPIO pin : Mode_Switch_Pin */
   GPIO_InitStruct.Pin = Mode_Switch_Pin;
   GPIO_InitStruct.Mode = GPIO_MODE_INPUT;
-  GPIO_InitStruct.Pull = GPIO_NOPULL;
+  GPIO_InitStruct.Pull = GPIO_PULLUP;
   HAL_GPIO_Init(Mode_Switch_GPIO_Port, &GPIO_InitStruct);
 
   /*Configure GPIO pins : Mode_Pin ScrollLock_Pin CapsLock_Pin NumLock_Pin
@@ -411,19 +412,19 @@ static void MX_GPIO_Init(void)
   /*Configure GPIO pin : Row_00_Pin */
   GPIO_InitStruct.Pin = Row_00_Pin;
   GPIO_InitStruct.Mode = GPIO_MODE_INPUT;
-  GPIO_InitStruct.Pull = GPIO_NOPULL;
+  GPIO_InitStruct.Pull = GPIO_PULLUP;
   HAL_GPIO_Init(Row_00_GPIO_Port, &GPIO_InitStruct);
 
   /*Configure GPIO pins : Row_01_Pin Row_02_Pin */
   GPIO_InitStruct.Pin = Row_01_Pin|Row_02_Pin;
   GPIO_InitStruct.Mode = GPIO_MODE_INPUT;
-  GPIO_InitStruct.Pull = GPIO_NOPULL;
+  GPIO_InitStruct.Pull = GPIO_PULLUP;
   HAL_GPIO_Init(GPIOC, &GPIO_InitStruct);
 
   /*Configure GPIO pins : Row_03_Pin Row_04_Pin Row_05_Pin Row_06_Pin */
   GPIO_InitStruct.Pin = Row_03_Pin|Row_04_Pin|Row_05_Pin|Row_06_Pin;
   GPIO_InitStruct.Mode = GPIO_MODE_INPUT;
-  GPIO_InitStruct.Pull = GPIO_NOPULL;
+  GPIO_InitStruct.Pull = GPIO_PULLUP;
   HAL_GPIO_Init(GPIOB, &GPIO_InitStruct);
 
   /*Configure GPIO pins : Column_12_Pin OLED_RST_Pin Cplumn_06_Pin Column_05_Pin
