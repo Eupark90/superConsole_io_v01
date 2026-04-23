@@ -1,14 +1,27 @@
 #include "io_control.h"
 #include "usbd_custom_hid_if.h"
+#include "usbd_customhid.h"
 #include <string.h>
 
 extern ADC_HandleTypeDef hadc;
 extern USBD_HandleTypeDef hUsbDeviceFS;
 
-static uint8_t matrix[NUM_COLUMNS][NUM_ROWS];
 static KeyboardReport_t kb_report;
 static MouseReport_t mouse_report;
 static GamepadReport_t gp_report;
+
+// Helper to wait until USB is ready to send another report
+static int8_t USB_SendReport(uint8_t *report, uint16_t len) {
+    USBD_CUSTOM_HID_HandleTypeDef *hhid = (USBD_CUSTOM_HID_HandleTypeDef *)hUsbDeviceFS.pClassData;
+    uint32_t timeout = HAL_GetTick() + 10;
+    
+    // Wait until the previous transfer is complete
+    while (hhid->state != CUSTOM_HID_IDLE) {
+        if (HAL_GetTick() > timeout) return USBD_BUSY;
+    }
+    
+    return USBD_CUSTOM_HID_SendReport(&hUsbDeviceFS, report, len);
+}
 
 typedef enum {
     TYPE_NONE,
@@ -36,8 +49,8 @@ typedef struct {
 // Gamepad Buttons (Bit indices)
 #define GP_L1      0
 #define GP_R1      1
-#define GP_L2      2 // Note: Spec says L2 Trigger is analog, but sometimes buttons are needed
-#define GP_R2      3 // Note: Spec says R2 Trigger is analog
+#define GP_L2      2
+#define GP_R2      3
 #define GP_L3      4
 #define GP_R3      5
 #define GP_SELECT  6
@@ -149,8 +162,6 @@ void IO_Control_Process(void) {
 
     // Special Fn combinations
     if (fn_pressed) {
-        // Fn + I (C8, R1 is F8, wait C8, R3 is I)
-        // Check if I is pressed
         for (int i = 0; i < 6; i++) {
             if (kb_report.keycodes[i] == 0x0C) { // 'I'
                 kb_report.keycodes[i] = 0x46; // PrintScreen
@@ -162,8 +173,6 @@ void IO_Control_Process(void) {
     }
 
     Read_ADC();
-    // ADC Mapping: PA1(LX), PA2(LY), PA4(RX), PA3(RY), PA0(L2), PA5(R2)
-    // CubeMX order might be different. Let's assume order 0-5.
     // Spec: PA0(L2), PA1(LX), PA2(LY), PA3(RY), PA4(RX), PA5(R2)
     gp_report.l2 = adc_values[0];
     gp_report.lx = adc_values[1];
@@ -173,19 +182,14 @@ void IO_Control_Process(void) {
     gp_report.r2 = adc_values[5];
 
     if (mode == GPIO_PIN_SET) { // Gamepad Mode
-        USBD_CUSTOM_HID_SendReport(&hUsbDeviceFS, (uint8_t*)&gp_report, sizeof(gp_report));
-        HAL_Delay(5);
-        USBD_CUSTOM_HID_SendReport(&hUsbDeviceFS, (uint8_t*)&kb_report, sizeof(kb_report));
+        USB_SendReport((uint8_t*)&gp_report, sizeof(gp_report));
+        USB_SendReport((uint8_t*)&kb_report, sizeof(kb_report));
     } else { // Mouse Mode
         mouse_report.buttons = 0;
-        // L-Joy (adc[1], adc[2]): Scroll
-        // R-Joy (adc[4], adc[3]): Move
-        // Trigger (adc[0], adc[5]): Acceleration
         int8_t mx = (int8_t)adc_values[4] - 127;
         int8_t my = (int8_t)adc_values[3] - 127;
         int8_t wheel = (int8_t)adc_values[2] - 127;
         
-        // Simple deadzone and scaling
         if (mx > -10 && mx < 10) mx = 0;
         if (my > -10 && my < 10) my = 0;
         if (wheel > -10 && wheel < 10) wheel = 0;
@@ -194,8 +198,7 @@ void IO_Control_Process(void) {
         mouse_report.y = my / 8;
         mouse_report.wheel = wheel / 16;
         
-        USBD_CUSTOM_HID_SendReport(&hUsbDeviceFS, (uint8_t*)&mouse_report, sizeof(mouse_report));
-        HAL_Delay(5);
-        USBD_CUSTOM_HID_SendReport(&hUsbDeviceFS, (uint8_t*)&kb_report, sizeof(kb_report));
+        USB_SendReport((uint8_t*)&mouse_report, sizeof(mouse_report));
+        USB_SendReport((uint8_t*)&kb_report, sizeof(kb_report));
     }
 }
