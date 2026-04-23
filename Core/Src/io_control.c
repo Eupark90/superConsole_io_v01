@@ -14,18 +14,12 @@ static KeyboardReport_t prev_kb_report;
 static GamepadReport_t prev_gp_report;
 static uint8_t prev_mouse_buttons;
 
-// Helper to wait until USB is ready to send another report
+/* Non-blocking send: if endpoint is busy this frame, caller retries next loop iteration */
 static int8_t USB_SendReport(uint8_t *report, uint16_t len) {
     if (hUsbDeviceFS.dev_state != USBD_STATE_CONFIGURED) return USBD_FAIL;
-    
     USBD_CUSTOM_HID_HandleTypeDef *hhid = (USBD_CUSTOM_HID_HandleTypeDef *)hUsbDeviceFS.pClassData;
     if (!hhid) return USBD_FAIL;
-
-    uint32_t timeout = HAL_GetTick() + 10;
-    while (hhid->state != CUSTOM_HID_IDLE) {
-        if (HAL_GetTick() > timeout) return USBD_BUSY;
-    }
-    
+    if (hhid->state != CUSTOM_HID_IDLE) return USBD_BUSY;
     return USBD_CUSTOM_HID_SendReport(&hUsbDeviceFS, report, len);
 }
 
@@ -182,8 +176,8 @@ void IO_Control_Process(void) {
     Read_ADC();
     gp_report.l2 = adc_values[0];
     gp_report.lx = adc_values[1];
-    gp_report.ly = adc_values[2];
-    gp_report.ry = adc_values[3];
+    gp_report.ly = 255 - adc_values[2]; // Y-axis inverted
+    gp_report.ry = 255 - adc_values[3]; // Y-axis inverted
     gp_report.rx = adc_values[4];
     gp_report.r2 = adc_values[5];
 
@@ -207,26 +201,29 @@ void IO_Control_Process(void) {
         if (gp_report.buttons & (1 << GP_R1)) {
             mouse_buttons |= 0x01;
         }
-
         /* R2 analog trigger (PA5, Hall sensor) -> right click.
-           Center is ~128. Threshold: deviation > 64 from center handles both sensor polarities. */
+           Threshold: deviation >64 from center(128) handles both sensor polarities. */
         if (adc_values[5] > 192 || adc_values[5] < 64) {
             mouse_buttons |= 0x02;
+        }
+        /* L3 (left stick click) -> middle button / wheel click */
+        if (gp_report.buttons & (1 << GP_L3)) {
+            mouse_buttons |= 0x04;
         }
 
         mouse_report.buttons = mouse_buttons;
 
-        int8_t mx = (int8_t)((int16_t)adc_values[4] - 128);
-        int8_t my = (int8_t)((int16_t)adc_values[3] - 128);
-        int8_t wheel = (int8_t)((int16_t)adc_values[2] - 128);
+        int8_t mx    = (int8_t)((int16_t)adc_values[4] - 128);
+        int8_t my    = (int8_t)(128 - (int16_t)adc_values[3]); // Y-axis inverted
+        int8_t wheel = (int8_t)(128 - (int16_t)adc_values[2]); // Y-axis inverted
 
         /* Deadzone ±25/128: covers joystick mechanical center variation and ADC noise */
-        if (mx >= -25 && mx <= 25) mx = 0;
-        if (my >= -25 && my <= 25) my = 0;
+        if (mx    >= -25 && mx    <= 25) mx    = 0;
+        if (my    >= -25 && my    <= 25) my    = 0;
         if (wheel >= -25 && wheel <= 25) wheel = 0;
 
-        mouse_report.x = mx / 8;
-        mouse_report.y = my / 8;
+        mouse_report.x     = mx    / 8;
+        mouse_report.y     = my    / 8;
         mouse_report.wheel = wheel / 16;
 
         /* Send on movement OR button state change (button-only clicks must not be dropped) */

@@ -22,7 +22,7 @@
 #include "usbd_custom_hid_if.h"
 
 /* USER CODE BEGIN INCLUDE */
-
+#include "main.h"
 /* USER CODE END INCLUDE */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -265,6 +265,12 @@ static int8_t CUSTOM_HID_DeInit_FS(void)
 static int8_t CUSTOM_HID_OutEvent_FS(uint8_t event_idx, uint8_t state)
 {
   /* USER CODE BEGIN 6 */
+  if (event_idx == 1) {
+    /* Keyboard LED output report: bit0=NumLock, bit1=CapsLock, bit2=ScrollLock */
+    HAL_GPIO_WritePin(NumLock_GPIO_Port,    NumLock_Pin,    (state & 0x01) ? GPIO_PIN_SET : GPIO_PIN_RESET);
+    HAL_GPIO_WritePin(CapsLock_GPIO_Port,   CapsLock_Pin,   (state & 0x02) ? GPIO_PIN_SET : GPIO_PIN_RESET);
+    HAL_GPIO_WritePin(ScrollLock_GPIO_Port, ScrollLock_Pin, (state & 0x04) ? GPIO_PIN_SET : GPIO_PIN_RESET);
+  }
   return (USBD_OK);
   /* USER CODE END 6 */
 }
