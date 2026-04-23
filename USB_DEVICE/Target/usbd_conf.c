@@ -335,8 +335,10 @@ USBD_StatusTypeDef USBD_LL_Init(USBD_HandleTypeDef *pdev)
   HAL_PCDEx_PMAConfig((PCD_HandleTypeDef*)pdev->pData , 0x80 , PCD_SNG_BUF, 0x58);
   /* USER CODE END EndPoint_Configuration */
   /* USER CODE BEGIN EndPoint_Configuration_CUSTOM_HID */
-  HAL_PCDEx_PMAConfig((PCD_HandleTypeDef*)pdev->pData , CUSTOM_HID_EPIN_ADDR , PCD_SNG_BUF, 0x98);
-  HAL_PCDEx_PMAConfig((PCD_HandleTypeDef*)pdev->pData , CUSTOM_HID_EPOUT_ADDR , PCD_SNG_BUF, 0xD8);
+  HAL_PCDEx_PMAConfig((PCD_HandleTypeDef*)pdev->pData , CUSTOM_HID_EPIN_ADDR  , PCD_SNG_BUF, 0x98);  /* EP1 IN  Keyboard  8 bytes */
+  HAL_PCDEx_PMAConfig((PCD_HandleTypeDef*)pdev->pData , CUSTOM_HID_EPOUT_ADDR , PCD_SNG_BUF, 0xA8);  /* EP1 OUT LED       1 byte  */
+  HAL_PCDEx_PMAConfig((PCD_HandleTypeDef*)pdev->pData , CUSTOM_HID_EP2IN_ADDR , PCD_SNG_BUF, 0xB8);  /* EP2 IN  Mouse     4 bytes */
+  HAL_PCDEx_PMAConfig((PCD_HandleTypeDef*)pdev->pData , CUSTOM_HID_EP3IN_ADDR , PCD_SNG_BUF, 0xC8);  /* EP3 IN  Gamepad   8 bytes */
   /* USER CODE END EndPoint_Configuration_CUSTOM_HID */
   return USBD_OK;
 }

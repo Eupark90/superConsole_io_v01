@@ -14,13 +14,14 @@ static KeyboardReport_t prev_kb_report;
 static GamepadReport_t prev_gp_report;
 static uint8_t prev_mouse_buttons;
 
-/* Non-blocking send: if endpoint is busy this frame, caller retries next loop iteration */
-static int8_t USB_SendReport(uint8_t *report, uint16_t len) {
+/* Non-blocking send to one of the three independent HID endpoints.
+   itf_idx: 0=Keyboard, 1=Mouse, 2=Gamepad */
+static int8_t USB_SendReport(uint8_t itf_idx, uint8_t *report, uint16_t len) {
     if (hUsbDeviceFS.dev_state != USBD_STATE_CONFIGURED) return USBD_FAIL;
     USBD_CUSTOM_HID_HandleTypeDef *hhid = (USBD_CUSTOM_HID_HandleTypeDef *)hUsbDeviceFS.pClassData;
     if (!hhid) return USBD_FAIL;
-    if (hhid->state != CUSTOM_HID_IDLE) return USBD_BUSY;
-    return USBD_CUSTOM_HID_SendReport(&hUsbDeviceFS, report, len);
+    if (hhid->state[itf_idx] != CUSTOM_HID_IDLE) return USBD_BUSY;
+    return USBD_CUSTOM_HID_SendReport(&hUsbDeviceFS, itf_idx, report, len);
 }
 
 typedef enum {
@@ -116,11 +117,8 @@ void apply_key(int c, int r, uint8_t *key_count, uint8_t *fn_pressed) {
 
 void IO_Control_Init(void) {
     memset(&kb_report, 0, sizeof(kb_report));
-    kb_report.report_id = 1;
     memset(&mouse_report, 0, sizeof(mouse_report));
-    mouse_report.report_id = 2;
     memset(&gp_report, 0, sizeof(gp_report));
-    gp_report.report_id = 3;
     gp_report.lx = gp_report.ly = gp_report.rx = gp_report.ry = 127;
     
     memcpy(&prev_kb_report, &kb_report, sizeof(kb_report));
@@ -209,7 +207,7 @@ void IO_Control_Process(void) {
 
     /* --- KEYBOARD: send immediately after matrix scan, before any ADC blocking --- */
     if (memcmp(&kb_report, &prev_kb_report, sizeof(kb_report)) != 0) {
-        if (USB_SendReport((uint8_t*)&kb_report, sizeof(kb_report)) == USBD_OK) {
+        if (USB_SendReport(0, (uint8_t*)&kb_report, sizeof(kb_report)) == USBD_OK) {
             memcpy(&prev_kb_report, &kb_report, sizeof(kb_report));
         }
     }
@@ -230,7 +228,7 @@ void IO_Control_Process(void) {
 
         if (mode == GPIO_PIN_SET) { // Gamepad Mode
             if (memcmp(&gp_report, &prev_gp_report, sizeof(gp_report)) != 0) {
-                if (USB_SendReport((uint8_t*)&gp_report, sizeof(gp_report)) == USBD_OK) {
+                if (USB_SendReport(2, (uint8_t*)&gp_report, sizeof(gp_report)) == USBD_OK) {
                     memcpy(&prev_gp_report, &gp_report, sizeof(gp_report));
                 }
             }
@@ -269,7 +267,7 @@ void IO_Control_Process(void) {
             /* Send on movement OR button state change */
             if (mouse_report.x != 0 || mouse_report.y != 0 || mouse_report.wheel != 0 ||
                 mouse_report.buttons != prev_mouse_buttons) {
-                USB_SendReport((uint8_t*)&mouse_report, sizeof(mouse_report));
+                USB_SendReport(1, (uint8_t*)&mouse_report, sizeof(mouse_report));
                 prev_mouse_buttons = mouse_report.buttons;
             }
         }

@@ -3,305 +3,152 @@
   ******************************************************************************
   * @file           : usbd_custom_hid_if.c
   * @version        : v2.0_Cube
-  * @brief          : USB Device Custom HID interface file.
-  ******************************************************************************
-  * @attention
-  *
-  * Copyright (c) 2026 STMicroelectronics.
-  * All rights reserved.
-  *
-  * This software is licensed under terms that can be found in the LICENSE file
-  * in the root directory of this software component.
-  * If no LICENSE file comes with this software, it is provided AS-IS.
-  *
+  * @brief          : USB Device Composite HID interface callbacks.
+  *                   Interface 0: Keyboard (boot-compatible, no Report ID)
+  *                   Interface 1: Mouse    (no Report ID)
+  *                   Interface 2: Gamepad  (no Report ID)
   ******************************************************************************
   */
 /* USER CODE END Header */
 
-/* Includes ------------------------------------------------------------------*/
 #include "usbd_custom_hid_if.h"
 
 /* USER CODE BEGIN INCLUDE */
 #include "main.h"
 /* USER CODE END INCLUDE */
 
-/* Private typedef -----------------------------------------------------------*/
-/* Private define ------------------------------------------------------------*/
-/* Private macro -------------------------------------------------------------*/
-
-/* USER CODE BEGIN PV */
-/* Private variables ---------------------------------------------------------*/
-
-/* USER CODE END PV */
-
-/** @addtogroup STM32_USB_OTG_DEVICE_LIBRARY
-  * @brief Usb device.
-  * @{
-  */
-
-/** @addtogroup USBD_CUSTOM_HID
-  * @{
-  */
-
-/** @defgroup USBD_CUSTOM_HID_Private_TypesDefinitions USBD_CUSTOM_HID_Private_TypesDefinitions
-  * @brief Private types.
-  * @{
-  */
-
-/* USER CODE BEGIN PRIVATE_TYPES */
-
-/* USER CODE END PRIVATE_TYPES */
-
-/**
-  * @}
-  */
-
-/** @defgroup USBD_CUSTOM_HID_Private_Defines USBD_CUSTOM_HID_Private_Defines
-  * @brief Private defines.
-  * @{
-  */
-
-/* USER CODE BEGIN PRIVATE_DEFINES */
-
-/* USER CODE END PRIVATE_DEFINES */
-
-/**
-  * @}
-  */
-
-/** @defgroup USBD_CUSTOM_HID_Private_Macros USBD_CUSTOM_HID_Private_Macros
-  * @brief Private macros.
-  * @{
-  */
-
-/* USER CODE BEGIN PRIVATE_MACRO */
-
-/* USER CODE END PRIVATE_MACRO */
-
-/**
-  * @}
-  */
-
-/** @defgroup USBD_CUSTOM_HID_Private_Variables USBD_CUSTOM_HID_Private_Variables
-  * @brief Private variables.
-  * @{
-  */
-
-/** Usb HID report descriptor. */
-__ALIGN_BEGIN static uint8_t CUSTOM_HID_ReportDesc_FS[USBD_CUSTOM_HID_REPORT_DESC_SIZE] __ALIGN_END =
-{
-  /* USER CODE BEGIN 0 */
-  /* Keyboard */
-  0x05, 0x01,                    // USAGE_PAGE (Generic Desktop)
-  0x09, 0x06,                    // USAGE (Keyboard)
-  0xa1, 0x01,                    // COLLECTION (Application)
-  0x85, 0x01,                    //   REPORT_ID (1)
-  0x05, 0x07,                    //   USAGE_PAGE (Keyboard)
-  0x19, 0xe0,                    //   USAGE_MINIMUM (Keyboard LeftControl)
-  0x29, 0xe7,                    //   USAGE_MAXIMUM (Keyboard Right GUI)
-  0x15, 0x00,                    //   LOGICAL_MINIMUM (0)
-  0x25, 0x01,                    //   LOGICAL_MAXIMUM (1)
-  0x75, 0x01,                    //   REPORT_SIZE (1)
-  0x95, 0x08,                    //   REPORT_COUNT (8)
-  0x81, 0x02,                    //   INPUT (Data,Var,Abs)
-  0x95, 0x01,                    //   REPORT_COUNT (1)
-  0x75, 0x08,                    //   REPORT_SIZE (8)
-  0x81, 0x03,                    //   INPUT (Cnst,Var,Abs)
-  0x95, 0x05,                    //   REPORT_COUNT (5)
-  0x75, 0x01,                    //   REPORT_SIZE (1)
-  0x05, 0x08,                    //   USAGE_PAGE (LEDs)
-  0x19, 0x01,                    //   USAGE_MINIMUM (Num Lock)
-  0x29, 0x05,                    //   USAGE_MAXIMUM (Kana)
-  0x91, 0x02,                    //   OUTPUT (Data,Var,Abs)
-  0x95, 0x01,                    //   REPORT_COUNT (1)
-  0x75, 0x03,                    //   REPORT_SIZE (3)
-  0x91, 0x03,                    //   OUTPUT (Cnst,Var,Abs)
-  0x95, 0x06,                    //   REPORT_COUNT (6)
-  0x75, 0x08,                    //   REPORT_SIZE (8)
-  0x15, 0x00,                    //   LOGICAL_MINIMUM (0)
-  0x25, 0x65,                    //   LOGICAL_MAXIMUM (101)
-  0x05, 0x07,                    //   USAGE_PAGE (Keyboard)
-  0x19, 0x00,                    //   USAGE_MINIMUM (Reserved (no event indicated))
-  0x29, 0x65,                    //   USAGE_MAXIMUM (Keyboard Application)
-  0x81, 0x00,                    //   INPUT (Data,Ary,Abs)
-  0xc0,                          // END_COLLECTION
-
-  /* Mouse */
-  0x05, 0x01,                    // USAGE_PAGE (Generic Desktop)
-  0x09, 0x02,                    // USAGE (Mouse)
-  0xa1, 0x01,                    // COLLECTION (Application)
-  0x09, 0x01,                    //   USAGE (Pointer)
-  0xa1, 0x00,                    //   COLLECTION (Physical)
-  0x85, 0x02,                    //     REPORT_ID (2)
-  0x05, 0x09,                    //     USAGE_PAGE (Button)
-  0x19, 0x01,                    //     USAGE_MINIMUM (Button 1)
-  0x29, 0x03,                    //     USAGE_MAXIMUM (Button 3)
-  0x15, 0x00,                    //     LOGICAL_MINIMUM (0)
-  0x25, 0x01,                    //     LOGICAL_MAXIMUM (1)
-  0x95, 0x03,                    //     REPORT_COUNT (3)
-  0x75, 0x01,                    //     REPORT_SIZE (1)
-  0x81, 0x02,                    //     INPUT (Data,Var,Abs)
-  0x95, 0x01,                    //     REPORT_COUNT (1)
-  0x75, 0x05,                    //     REPORT_SIZE (5)
-  0x81, 0x03,                    //     INPUT (Cnst,Var,Abs)
-  0x05, 0x01,                    //     USAGE_PAGE (Generic Desktop)
-  0x09, 0x30,                    //     USAGE (X)
-  0x09, 0x31,                    //     USAGE (Y)
-  0x09, 0x38,                    //     USAGE (Wheel)
-  0x15, 0x81,                    //     LOGICAL_MINIMUM (-127)
-  0x25, 0x7f,                    //     LOGICAL_MAXIMUM (127)
-  0x75, 0x08,                    //     REPORT_SIZE (8)
-  0x95, 0x03,                    //     REPORT_COUNT (3)
-  0x81, 0x06,                    //     INPUT (Data,Var,Rel)
-  0xc0,                          //   END_COLLECTION
-  0xc0,                          // END_COLLECTION
-
-  /* Gamepad */
-  0x05, 0x01,                    // USAGE_PAGE (Generic Desktop)
-  0x09, 0x05,                    // USAGE (Game Pad)
-  0xa1, 0x01,                    // COLLECTION (Application)
-  0x85, 0x03,                    //   REPORT_ID (3)
-  0x05, 0x09,                    //   USAGE_PAGE (Button)
-  0x19, 0x01,                    //   USAGE_MINIMUM (Button 1)
-  0x29, 0x10,                    //   USAGE_MAXIMUM (Button 16)
-  0x15, 0x00,                    //   LOGICAL_MINIMUM (0)
-  0x25, 0x01,                    //   LOGICAL_MAXIMUM (1)
-  0x75, 0x01,                    //   REPORT_SIZE (1)
-  0x95, 0x10,                    //   REPORT_COUNT (16)
-  0x81, 0x02,                    //   INPUT (Data,Var,Abs)
-  0x05, 0x01,                    //   USAGE_PAGE (Generic Desktop)
-  0x09, 0x30,                    //   USAGE (X)
-  0x09, 0x31,                    //   USAGE (Y)
-  0x09, 0x32,                    //   USAGE (Z)
-  0x09, 0x33,                    //   USAGE (Rx)
-  0x09, 0x34,                    //   USAGE (Ry)
-  0x09, 0x35,                    //   USAGE (Rz)
-  0x15, 0x00,                    //   LOGICAL_MINIMUM (0)
-  0x26, 0xff, 0x00,              //   LOGICAL_MAXIMUM (255)
-  0x75, 0x08,                    //   REPORT_SIZE (8)
-  0x95, 0x06,                    //   REPORT_COUNT (6)
-  0x81, 0x02,                    //   INPUT (Data,Var,Abs)
-  0xc0                           // END_COLLECTION
-  /* USER CODE END 0 */
-};
-
-/* USER CODE BEGIN PRIVATE_VARIABLES */
-
-/* USER CODE END PRIVATE_VARIABLES */
-
-/**
-  * @}
-  */
-
-/** @defgroup USBD_CUSTOM_HID_Exported_Variables USBD_CUSTOM_HID_Exported_Variables
-  * @brief Public variables.
-  * @{
-  */
 extern USBD_HandleTypeDef hUsbDeviceFS;
 
-/* USER CODE BEGIN EXPORTED_VARIABLES */
-
-/* USER CODE END EXPORTED_VARIABLES */
-/**
-  * @}
-  */
-
-/** @defgroup USBD_CUSTOM_HID_Private_FunctionPrototypes USBD_CUSTOM_HID_Private_FunctionPrototypes
-  * @brief Private functions declaration.
-  * @{
-  */
-
-static int8_t CUSTOM_HID_Init_FS(void);
-static int8_t CUSTOM_HID_DeInit_FS(void);
-static int8_t CUSTOM_HID_OutEvent_FS(uint8_t event_idx, uint8_t state);
-
-/**
-  * @}
-  */
-
-USBD_CUSTOM_HID_ItfTypeDef USBD_CustomHID_fops_FS =
+/* ---- Interface 0: Keyboard report descriptor (63 bytes) ---- */
+__ALIGN_BEGIN static uint8_t HID_KbdReportDesc[USBD_CUSTOM_HID_KBD_REPORT_DESC_SIZE] __ALIGN_END =
 {
-  CUSTOM_HID_ReportDesc_FS,
-  CUSTOM_HID_Init_FS,
-  CUSTOM_HID_DeInit_FS,
-  CUSTOM_HID_OutEvent_FS
+  0x05, 0x01,  // USAGE_PAGE (Generic Desktop)
+  0x09, 0x06,  // USAGE (Keyboard)
+  0xa1, 0x01,  // COLLECTION (Application)
+  0x05, 0x07,  //   USAGE_PAGE (Keyboard)
+  0x19, 0xe0,  //   USAGE_MINIMUM (Keyboard LeftControl)
+  0x29, 0xe7,  //   USAGE_MAXIMUM (Keyboard Right GUI)
+  0x15, 0x00,  //   LOGICAL_MINIMUM (0)
+  0x25, 0x01,  //   LOGICAL_MAXIMUM (1)
+  0x75, 0x01,  //   REPORT_SIZE (1)
+  0x95, 0x08,  //   REPORT_COUNT (8)
+  0x81, 0x02,  //   INPUT (Data,Var,Abs)          <- modifier byte
+  0x95, 0x01,  //   REPORT_COUNT (1)
+  0x75, 0x08,  //   REPORT_SIZE (8)
+  0x81, 0x03,  //   INPUT (Cnst,Var,Abs)           <- reserved byte
+  0x95, 0x05,  //   REPORT_COUNT (5)
+  0x75, 0x01,  //   REPORT_SIZE (1)
+  0x05, 0x08,  //   USAGE_PAGE (LEDs)
+  0x19, 0x01,  //   USAGE_MINIMUM (Num Lock)
+  0x29, 0x05,  //   USAGE_MAXIMUM (Kana)
+  0x91, 0x02,  //   OUTPUT (Data,Var,Abs)          <- LED 5 bits
+  0x95, 0x01,  //   REPORT_COUNT (1)
+  0x75, 0x03,  //   REPORT_SIZE (3)
+  0x91, 0x03,  //   OUTPUT (Cnst,Var,Abs)          <- LED 3 pad bits
+  0x95, 0x06,  //   REPORT_COUNT (6)
+  0x75, 0x08,  //   REPORT_SIZE (8)
+  0x15, 0x00,  //   LOGICAL_MINIMUM (0)
+  0x25, 0x65,  //   LOGICAL_MAXIMUM (101)
+  0x05, 0x07,  //   USAGE_PAGE (Keyboard)
+  0x19, 0x00,  //   USAGE_MINIMUM (Reserved)
+  0x29, 0x65,  //   USAGE_MAXIMUM (Keyboard Application)
+  0x81, 0x00,  //   INPUT (Data,Ary,Abs)           <- 6 key slots
+  0xc0         // END_COLLECTION
 };
 
-/** @defgroup USBD_CUSTOM_HID_Private_Functions USBD_CUSTOM_HID_Private_Functions
-  * @brief Private functions.
-  * @{
-  */
+/* ---- Interface 1: Mouse report descriptor (52 bytes) ---- */
+__ALIGN_BEGIN static uint8_t HID_MouseReportDesc[USBD_CUSTOM_HID_MOUSE_REPORT_DESC_SIZE] __ALIGN_END =
+{
+  0x05, 0x01,  // USAGE_PAGE (Generic Desktop)
+  0x09, 0x02,  // USAGE (Mouse)
+  0xa1, 0x01,  // COLLECTION (Application)
+  0x09, 0x01,  //   USAGE (Pointer)
+  0xa1, 0x00,  //   COLLECTION (Physical)
+  0x05, 0x09,  //     USAGE_PAGE (Button)
+  0x19, 0x01,  //     USAGE_MINIMUM (Button 1)
+  0x29, 0x03,  //     USAGE_MAXIMUM (Button 3)
+  0x15, 0x00,  //     LOGICAL_MINIMUM (0)
+  0x25, 0x01,  //     LOGICAL_MAXIMUM (1)
+  0x95, 0x03,  //     REPORT_COUNT (3)
+  0x75, 0x01,  //     REPORT_SIZE (1)
+  0x81, 0x02,  //     INPUT (Data,Var,Abs)         <- 3 button bits
+  0x95, 0x01,  //     REPORT_COUNT (1)
+  0x75, 0x05,  //     REPORT_SIZE (5)
+  0x81, 0x03,  //     INPUT (Cnst,Var,Abs)          <- 5 pad bits
+  0x05, 0x01,  //     USAGE_PAGE (Generic Desktop)
+  0x09, 0x30,  //     USAGE (X)
+  0x09, 0x31,  //     USAGE (Y)
+  0x09, 0x38,  //     USAGE (Wheel)
+  0x15, 0x81,  //     LOGICAL_MINIMUM (-127)
+  0x25, 0x7f,  //     LOGICAL_MAXIMUM (127)
+  0x75, 0x08,  //     REPORT_SIZE (8)
+  0x95, 0x03,  //     REPORT_COUNT (3)
+  0x81, 0x06,  //     INPUT (Data,Var,Rel)          <- X, Y, Wheel
+  0xc0,        //   END_COLLECTION
+  0xc0         // END_COLLECTION
+};
 
-/* Private functions ---------------------------------------------------------*/
+/* ---- Interface 2: Gamepad report descriptor (48 bytes) ---- */
+__ALIGN_BEGIN static uint8_t HID_GpReportDesc[USBD_CUSTOM_HID_GP_REPORT_DESC_SIZE] __ALIGN_END =
+{
+  0x05, 0x01,        // USAGE_PAGE (Generic Desktop)
+  0x09, 0x05,        // USAGE (Game Pad)
+  0xa1, 0x01,        // COLLECTION (Application)
+  0x05, 0x09,        //   USAGE_PAGE (Button)
+  0x19, 0x01,        //   USAGE_MINIMUM (Button 1)
+  0x29, 0x10,        //   USAGE_MAXIMUM (Button 16)
+  0x15, 0x00,        //   LOGICAL_MINIMUM (0)
+  0x25, 0x01,        //   LOGICAL_MAXIMUM (1)
+  0x75, 0x01,        //   REPORT_SIZE (1)
+  0x95, 0x10,        //   REPORT_COUNT (16)
+  0x81, 0x02,        //   INPUT (Data,Var,Abs)      <- 16 buttons
+  0x05, 0x01,        //   USAGE_PAGE (Generic Desktop)
+  0x09, 0x30,        //   USAGE (X)
+  0x09, 0x31,        //   USAGE (Y)
+  0x09, 0x32,        //   USAGE (Z)
+  0x09, 0x33,        //   USAGE (Rx)
+  0x09, 0x34,        //   USAGE (Ry)
+  0x09, 0x35,        //   USAGE (Rz)
+  0x15, 0x00,        //   LOGICAL_MINIMUM (0)
+  0x26, 0xff, 0x00,  //   LOGICAL_MAXIMUM (255)
+  0x75, 0x08,        //   REPORT_SIZE (8)
+  0x95, 0x06,        //   REPORT_COUNT (6)
+  0x81, 0x02,        //   INPUT (Data,Var,Abs)      <- 6 axes
+  0xc0               // END_COLLECTION
+};
 
-/**
-  * @brief  Initializes the CUSTOM HID media low layer
-  * @retval USBD_OK if all operations are OK else USBD_FAIL
-  */
+/* ---- Interface callbacks ---- */
+
 static int8_t CUSTOM_HID_Init_FS(void)
 {
-  /* USER CODE BEGIN 4 */
-  return (USBD_OK);
-  /* USER CODE END 4 */
+  return USBD_OK;
 }
 
-/**
-  * @brief  DeInitializes the CUSTOM HID media low layer
-  * @retval USBD_OK if all operations are OK else USBD_FAIL
-  */
 static int8_t CUSTOM_HID_DeInit_FS(void)
 {
-  /* USER CODE BEGIN 5 */
-  return (USBD_OK);
-  /* USER CODE END 5 */
+  return USBD_OK;
 }
 
-/**
-  * @brief  Manage the CUSTOM HID class events
-  * @param  event_idx: Event index
-  * @param  state: Event state
-  * @retval USBD_OK if all operations are OK else USBD_FAIL
-  */
-static int8_t CUSTOM_HID_OutEvent_FS(uint8_t event_idx, uint8_t state)
-{
-  /* USER CODE BEGIN 6 */
-  if (event_idx == 1) {
-    /* Keyboard LED output report: bit0=NumLock, bit1=CapsLock, bit2=ScrollLock */
-    HAL_GPIO_WritePin(NumLock_GPIO_Port,    NumLock_Pin,    (state & 0x01) ? GPIO_PIN_SET : GPIO_PIN_RESET);
-    HAL_GPIO_WritePin(CapsLock_GPIO_Port,   CapsLock_Pin,   (state & 0x02) ? GPIO_PIN_SET : GPIO_PIN_RESET);
-    HAL_GPIO_WritePin(ScrollLock_GPIO_Port, ScrollLock_Pin, (state & 0x04) ? GPIO_PIN_SET : GPIO_PIN_RESET);
-  }
-  return (USBD_OK);
-  /* USER CODE END 6 */
-}
-
-/* USER CODE BEGIN 7 */
-/**
-  * @brief  Send the report to the Host
-  * @param  report: The report to be sent
-  * @param  len: The report length
-  * @retval USBD_OK if all operations are OK else USBD_FAIL
-  */
 /*
-static int8_t USBD_CUSTOM_HID_SendReport_FS(uint8_t *report, uint16_t len)
+ * itf_idx: 0 = keyboard LED report (data = LED bitmask)
+ *          data bit0 = NumLock, bit1 = CapsLock, bit2 = ScrollLock
+ */
+static int8_t CUSTOM_HID_OutEvent_FS(uint8_t itf_idx, uint8_t data)
 {
-  return USBD_CUSTOM_HID_SendReport(&hUsbDeviceFS, report, len);
+  if (itf_idx == 0U) {
+    HAL_GPIO_WritePin(NumLock_GPIO_Port,    NumLock_Pin,    (data & 0x01U) ? GPIO_PIN_SET : GPIO_PIN_RESET);
+    HAL_GPIO_WritePin(CapsLock_GPIO_Port,   CapsLock_Pin,   (data & 0x02U) ? GPIO_PIN_SET : GPIO_PIN_RESET);
+    HAL_GPIO_WritePin(ScrollLock_GPIO_Port, ScrollLock_Pin, (data & 0x04U) ? GPIO_PIN_SET : GPIO_PIN_RESET);
+  }
+  return USBD_OK;
 }
-*/
-/* USER CODE END 7 */
 
-/* USER CODE BEGIN PRIVATE_FUNCTIONS_IMPLEMENTATION */
-
-/* USER CODE END PRIVATE_FUNCTIONS_IMPLEMENTATION */
-/**
-  * @}
-  */
-
-/**
-  * @}
-  */
-
-/**
-  * @}
-  */
-
+USBD_CUSTOM_HID_ItfTypeDef USBD_CustomHID_fops_FS = {
+  { HID_KbdReportDesc,  HID_MouseReportDesc,  HID_GpReportDesc  },
+  { USBD_CUSTOM_HID_KBD_REPORT_DESC_SIZE,
+    USBD_CUSTOM_HID_MOUSE_REPORT_DESC_SIZE,
+    USBD_CUSTOM_HID_GP_REPORT_DESC_SIZE },
+  CUSTOM_HID_Init_FS,
+  CUSTOM_HID_DeInit_FS,
+  CUSTOM_HID_OutEvent_FS,
+};
