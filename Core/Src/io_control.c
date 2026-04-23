@@ -81,23 +81,30 @@ static const KeyMap_t keymap[NUM_COLUMNS][NUM_ROWS] = {
     {{TYPE_GAMEPAD, GP_R1}, {TYPE_KEYBOARD, 0x4C}, {TYPE_KEYBOARD, 0x2A}, {TYPE_KEYBOARD, 0x31}, {TYPE_KEYBOARD, 0x4A}, {TYPE_KEYBOARD, 0x4D}, {TYPE_KEYBOARD, 0x4E}}, // C13
 };
 
-static GPIO_TypeDef* column_ports[NUM_COLUMNS] = {
+static GPIO_TypeDef* const column_ports[NUM_COLUMNS] = {
     GPIOB, GPIOB, GPIOB, GPIOB, GPIOB, GPIOB, GPIOB,
     GPIOD, GPIOC, GPIOC, GPIOC, GPIOA, GPIOB, GPIOA
 };
 
-static uint16_t column_pins[NUM_COLUMNS] = {
+static const uint16_t column_pins[NUM_COLUMNS] = {
     GPIO_PIN_9, GPIO_PIN_8, GPIO_PIN_7, GPIO_PIN_6, GPIO_PIN_5, GPIO_PIN_4, GPIO_PIN_3,
     GPIO_PIN_2, GPIO_PIN_12, GPIO_PIN_11, GPIO_PIN_10, GPIO_PIN_15, GPIO_PIN_11, GPIO_PIN_6
 };
 
-static GPIO_TypeDef* row_ports[NUM_ROWS] = {
-    GPIOA, GPIOC, GPIOC, GPIOB, GPIOB, GPIOB, GPIOB
-};
+/* Row pins are fixed — read IDR directly instead of calling HAL_GPIO_ReadPin per row:
+   R0=PA7, R1=PC4, R2=PC5, R3=PB0, R4=PB1, R5=PB2, R6=PB10 */
 
-static uint16_t row_pins[NUM_ROWS] = {
-    GPIO_PIN_7, GPIO_PIN_4, GPIO_PIN_5, GPIO_PIN_0, GPIO_PIN_1, GPIO_PIN_2, GPIO_PIN_10
-};
+static __attribute__((always_inline)) inline
+void apply_key(int c, int r, uint8_t *key_count, uint8_t *fn_pressed) {
+    const KeyMap_t *k = &keymap[c][r];
+    switch (k->type) {
+        case TYPE_KEYBOARD: if (*key_count < 6) kb_report.keycodes[(*key_count)++] = k->value; break;
+        case TYPE_MODIFIER: kb_report.modifiers  |= k->value; break;
+        case TYPE_GAMEPAD:  gp_report.buttons    |= (1u << k->value); break;
+        case TYPE_FN:       *fn_pressed = 1; break;
+        default: break;
+    }
+}
 
 void IO_Control_Init(void) {
     memset(&kb_report, 0, sizeof(kb_report));
@@ -136,34 +143,26 @@ void IO_Control_Process(void) {
     uint8_t fn_pressed = 0;
 
     for (int c = 0; c < NUM_COLUMNS; c++) {
-        /* Drive column HIGH: diode (A=column, K=switch side) forward-biases,
-           allowing current to reach the row when switch is closed */
-        HAL_GPIO_WritePin(column_ports[c], column_pins[c], GPIO_PIN_SET);
-        /* Short settle time for signal to propagate */
+        GPIO_TypeDef *port = column_ports[c];
+        uint16_t      pin  = column_pins[c];
+
+        port->BSRR = pin;              // SET column HIGH (direct register, no HAL overhead)
         __NOP(); __NOP(); __NOP(); __NOP();
-        for (int r = 0; r < NUM_ROWS; r++) {
-            /* Row reads HIGH when key is pressed (pulled up through diode+switch) */
-            if (HAL_GPIO_ReadPin(row_ports[r], row_pins[r]) == GPIO_PIN_SET) {
-                KeyMap_t key = keymap[c][r];
-                switch (key.type) {
-                    case TYPE_KEYBOARD:
-                        if (key_count < 6) kb_report.keycodes[key_count++] = key.value;
-                        break;
-                    case TYPE_MODIFIER:
-                        kb_report.modifiers |= key.value;
-                        break;
-                    case TYPE_GAMEPAD:
-                        gp_report.buttons |= (1 << key.value);
-                        break;
-                    case TYPE_FN:
-                        fn_pressed = 1;
-                        break;
-                    default: break;
-                }
-            }
-        }
-        /* Restore column LOW (inactive) before scanning next column */
-        HAL_GPIO_WritePin(column_ports[c], column_pins[c], GPIO_PIN_RESET);
+
+        /* Read all row ports once — 3 reads cover all 7 rows */
+        uint32_t idrA = GPIOA->IDR;   // R0: PA7
+        uint32_t idrB = GPIOB->IDR;   // R3:PB0, R4:PB1, R5:PB2, R6:PB10
+        uint32_t idrC = GPIOC->IDR;   // R1:PC4, R2:PC5
+
+        if (idrA & GPIO_PIN_7)  apply_key(c, 0, &key_count, &fn_pressed);
+        if (idrC & GPIO_PIN_4)  apply_key(c, 1, &key_count, &fn_pressed);
+        if (idrC & GPIO_PIN_5)  apply_key(c, 2, &key_count, &fn_pressed);
+        if (idrB & GPIO_PIN_0)  apply_key(c, 3, &key_count, &fn_pressed);
+        if (idrB & GPIO_PIN_1)  apply_key(c, 4, &key_count, &fn_pressed);
+        if (idrB & GPIO_PIN_2)  apply_key(c, 5, &key_count, &fn_pressed);
+        if (idrB & GPIO_PIN_10) apply_key(c, 6, &key_count, &fn_pressed);
+
+        port->BRR = pin;               // RESET column LOW
     }
 
     if (fn_pressed) {
