@@ -203,10 +203,11 @@ void IO_Control_Process(void) {
         int8_t mx = (int8_t)((int16_t)adc_values[4] - 128);
         int8_t my = (int8_t)((int16_t)adc_values[3] - 128);
         int8_t wheel = (int8_t)((int16_t)adc_values[2] - 128);
-        
-        if (mx > -10 && mx < 10) mx = 0;
-        if (my > -10 && my < 10) my = 0;
-        if (wheel > -10 && wheel < 10) wheel = 0;
+
+        /* Deadzone ±25/128: covers joystick mechanical center variation and ADC noise */
+        if (mx >= -25 && mx <= 25) mx = 0;
+        if (my >= -25 && my <= 25) my = 0;
+        if (wheel >= -25 && wheel <= 25) wheel = 0;
         
         mouse_report.x = mx / 8;
         mouse_report.y = my / 8;
