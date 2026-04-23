@@ -91,8 +91,16 @@ static const uint16_t column_pins[NUM_COLUMNS] = {
     GPIO_PIN_2, GPIO_PIN_12, GPIO_PIN_11, GPIO_PIN_10, GPIO_PIN_15, GPIO_PIN_11, GPIO_PIN_6
 };
 
-/* Row pins are fixed — read IDR directly instead of calling HAL_GPIO_ReadPin per row:
-   R0=PA7, R1=PC4, R2=PC5, R3=PB0, R4=PB1, R5=PB2, R6=PB10 */
+/* Row pins (R0=PA7, R1=PC4, R2=PC5, R3=PB0, R4=PB1, R5=PB2, R6=PB10)
+   Read all rows via 3 IDR register reads per column scan. */
+
+/* Debounce: mechanical switches bounce 5-20ms. Accept a state change only
+   after the raw reading has been stable for DEBOUNCE_MS consecutive ms.
+   Per-column bitmask — one bit per row (bits 0-6). */
+#define DEBOUNCE_MS 8
+static uint8_t  db_state[NUM_COLUMNS]; // last accepted (debounced) bitmask
+static uint8_t  db_raw  [NUM_COLUMNS]; // last raw bitmask
+static uint32_t db_time [NUM_COLUMNS]; // tick when db_raw last changed
 
 static __attribute__((always_inline)) inline
 void apply_key(int c, int r, uint8_t *key_count, uint8_t *fn_pressed) {
@@ -118,6 +126,9 @@ void IO_Control_Init(void) {
     memcpy(&prev_kb_report, &kb_report, sizeof(kb_report));
     memcpy(&prev_gp_report, &gp_report, sizeof(gp_report));
     prev_mouse_buttons = 0;
+    memset(db_state, 0, sizeof(db_state));
+    memset(db_raw,   0, sizeof(db_raw));
+    memset(db_time,  0, sizeof(db_time));
 }
 
 static uint8_t adc_values[6];
@@ -142,27 +153,51 @@ void IO_Control_Process(void) {
     uint8_t key_count = 0;
     uint8_t fn_pressed = 0;
 
+    uint32_t now = HAL_GetTick();
+
     for (int c = 0; c < NUM_COLUMNS; c++) {
         GPIO_TypeDef *port = column_ports[c];
         uint16_t      pin  = column_pins[c];
 
-        port->BSRR = pin;              // SET column HIGH (direct register, no HAL overhead)
-        __NOP(); __NOP(); __NOP(); __NOP();
+        port->BSRR = pin;
+        /* 8 NOPs = ~167ns at 48MHz — enough for diode+switch+trace RC to settle */
+        __NOP(); __NOP(); __NOP(); __NOP(); __NOP(); __NOP(); __NOP(); __NOP();
 
-        /* Read all row ports once — 3 reads cover all 7 rows */
-        uint32_t idrA = GPIOA->IDR;   // R0: PA7
-        uint32_t idrB = GPIOB->IDR;   // R3:PB0, R4:PB1, R5:PB2, R6:PB10
-        uint32_t idrC = GPIOC->IDR;   // R1:PC4, R2:PC5
+        /* 3 IDR reads capture all 7 rows simultaneously */
+        uint32_t idrA = GPIOA->IDR;
+        uint32_t idrB = GPIOB->IDR;
+        uint32_t idrC = GPIOC->IDR;
 
-        if (idrA & GPIO_PIN_7)  apply_key(c, 0, &key_count, &fn_pressed);
-        if (idrC & GPIO_PIN_4)  apply_key(c, 1, &key_count, &fn_pressed);
-        if (idrC & GPIO_PIN_5)  apply_key(c, 2, &key_count, &fn_pressed);
-        if (idrB & GPIO_PIN_0)  apply_key(c, 3, &key_count, &fn_pressed);
-        if (idrB & GPIO_PIN_1)  apply_key(c, 4, &key_count, &fn_pressed);
-        if (idrB & GPIO_PIN_2)  apply_key(c, 5, &key_count, &fn_pressed);
-        if (idrB & GPIO_PIN_10) apply_key(c, 6, &key_count, &fn_pressed);
+        port->BRR = pin;
 
-        port->BRR = pin;               // RESET column LOW
+        /* Pack raw row states into a bitmask (bit i = row i) */
+        uint8_t raw = 0;
+        if (idrA & GPIO_PIN_7)  raw |= (1 << 0);
+        if (idrC & GPIO_PIN_4)  raw |= (1 << 1);
+        if (idrC & GPIO_PIN_5)  raw |= (1 << 2);
+        if (idrB & GPIO_PIN_0)  raw |= (1 << 3);
+        if (idrB & GPIO_PIN_1)  raw |= (1 << 4);
+        if (idrB & GPIO_PIN_2)  raw |= (1 << 5);
+        if (idrB & GPIO_PIN_10) raw |= (1 << 6);
+
+        /* Debounce: only accept raw when it has been stable for DEBOUNCE_MS */
+        if (raw != db_raw[c]) {
+            db_raw[c]  = raw;
+            db_time[c] = now;
+        }
+        if (db_raw[c] != db_state[c] && (now - db_time[c]) >= DEBOUNCE_MS) {
+            db_state[c] = db_raw[c];
+        }
+
+        /* Apply the debounced state to reports */
+        uint8_t bits = db_state[c];
+        if (bits & (1 << 0)) apply_key(c, 0, &key_count, &fn_pressed);
+        if (bits & (1 << 1)) apply_key(c, 1, &key_count, &fn_pressed);
+        if (bits & (1 << 2)) apply_key(c, 2, &key_count, &fn_pressed);
+        if (bits & (1 << 3)) apply_key(c, 3, &key_count, &fn_pressed);
+        if (bits & (1 << 4)) apply_key(c, 4, &key_count, &fn_pressed);
+        if (bits & (1 << 5)) apply_key(c, 5, &key_count, &fn_pressed);
+        if (bits & (1 << 6)) apply_key(c, 6, &key_count, &fn_pressed);
     }
 
     if (fn_pressed) {
