@@ -217,7 +217,6 @@ void IO_Control_Process(void) {
     /* --- ANALOG: rate-limited to 8ms (125 Hz). ADC blocks ~29us per call so
        keeping it off the keyboard path eliminates the main latency source. --- */
     static uint32_t last_adc_ms = 0;
-    uint32_t now = HAL_GetTick();
     if (now - last_adc_ms >= 8) {
         last_adc_ms = now;
 
