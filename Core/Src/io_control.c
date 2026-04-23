@@ -10,12 +10,17 @@ static KeyboardReport_t kb_report;
 static MouseReport_t mouse_report;
 static GamepadReport_t gp_report;
 
+static KeyboardReport_t prev_kb_report;
+static GamepadReport_t prev_gp_report;
+
 // Helper to wait until USB is ready to send another report
 static int8_t USB_SendReport(uint8_t *report, uint16_t len) {
-    USBD_CUSTOM_HID_HandleTypeDef *hhid = (USBD_CUSTOM_HID_HandleTypeDef *)hUsbDeviceFS.pClassData;
-    uint32_t timeout = HAL_GetTick() + 10;
+    if (hUsbDeviceFS.dev_state != USBD_STATE_CONFIGURED) return USBD_FAIL;
     
-    // Wait until the previous transfer is complete
+    USBD_CUSTOM_HID_HandleTypeDef *hhid = (USBD_CUSTOM_HID_HandleTypeDef *)hUsbDeviceFS.pClassData;
+    if (!hhid) return USBD_FAIL;
+
+    uint32_t timeout = HAL_GetTick() + 10;
     while (hhid->state != CUSTOM_HID_IDLE) {
         if (HAL_GetTick() > timeout) return USBD_BUSY;
     }
@@ -33,7 +38,7 @@ typedef enum {
 
 typedef struct {
     KeyType_t type;
-    uint8_t value; // HID Keycode, Modifier bit, or Gamepad button index
+    uint8_t value;
 } KeyMap_t;
 
 // HID Modifiers
@@ -107,6 +112,9 @@ void IO_Control_Init(void) {
     memset(&gp_report, 0, sizeof(gp_report));
     gp_report.report_id = 3;
     gp_report.lx = gp_report.ly = gp_report.rx = gp_report.ry = 127;
+    
+    memcpy(&prev_kb_report, &kb_report, sizeof(kb_report));
+    memcpy(&prev_gp_report, &gp_report, sizeof(gp_report));
 }
 
 static uint8_t adc_values[6];
@@ -115,7 +123,7 @@ void Read_ADC(void) {
     HAL_ADC_Start(&hadc);
     for (int i = 0; i < 6; i++) {
         if (HAL_ADC_PollForConversion(&hadc, 10) == HAL_OK) {
-            adc_values[i] = HAL_ADC_GetValue(&hadc) >> 4; // 12-bit to 8-bit
+            adc_values[i] = HAL_ADC_GetValue(&hadc) >> 4;
         }
     }
     HAL_ADC_Stop(&hadc);
@@ -125,7 +133,6 @@ void IO_Control_Process(void) {
     uint8_t mode = HAL_GPIO_ReadPin(Mode_Switch_GPIO_Port, Mode_Switch_Pin);
     HAL_GPIO_WritePin(Mode_GPIO_Port, Mode_Pin, mode == GPIO_PIN_RESET ? GPIO_PIN_SET : GPIO_PIN_RESET);
 
-    // Keyboard Scanning
     memset(kb_report.keycodes, 0, 6);
     kb_report.modifiers = 0;
     gp_report.buttons = 0;
@@ -134,15 +141,13 @@ void IO_Control_Process(void) {
 
     for (int c = 0; c < NUM_COLUMNS; c++) {
         HAL_GPIO_WritePin(column_ports[c], column_pins[c], GPIO_PIN_RESET);
-        HAL_Delay(1); // Settling time
+        HAL_Delay(1);
         for (int r = 0; r < NUM_ROWS; r++) {
             if (HAL_GPIO_ReadPin(row_ports[r], row_pins[r]) == GPIO_PIN_RESET) {
                 KeyMap_t key = keymap[c][r];
                 switch (key.type) {
                     case TYPE_KEYBOARD:
-                        if (key_count < 6) {
-                            kb_report.keycodes[key_count++] = key.value;
-                        }
+                        if (key_count < 6) kb_report.keycodes[key_count++] = key.value;
                         break;
                     case TYPE_MODIFIER:
                         kb_report.modifiers |= key.value;
@@ -160,20 +165,14 @@ void IO_Control_Process(void) {
         HAL_GPIO_WritePin(column_ports[c], column_pins[c], GPIO_PIN_SET);
     }
 
-    // Special Fn combinations
     if (fn_pressed) {
         for (int i = 0; i < 6; i++) {
-            if (kb_report.keycodes[i] == 0x0C) { // 'I'
-                kb_report.keycodes[i] = 0x46; // PrintScreen
-            }
-            if (kb_report.keycodes[i] == 0x12) { // 'O'
-                kb_report.keycodes[i] = 0x47; // Scroll Lock
-            }
+            if (kb_report.keycodes[i] == 0x0C) kb_report.keycodes[i] = 0x46; // PrintScreen
+            if (kb_report.keycodes[i] == 0x12) kb_report.keycodes[i] = 0x47; // Scroll Lock
         }
     }
 
     Read_ADC();
-    // Spec: PA0(L2), PA1(LX), PA2(LY), PA3(RY), PA4(RX), PA5(R2)
     gp_report.l2 = adc_values[0];
     gp_report.lx = adc_values[1];
     gp_report.ly = adc_values[2];
@@ -181,9 +180,19 @@ void IO_Control_Process(void) {
     gp_report.rx = adc_values[4];
     gp_report.r2 = adc_values[5];
 
+    // Only send if changed or mode requires
+    if (memcmp(&kb_report, &prev_kb_report, sizeof(kb_report)) != 0) {
+        if (USB_SendReport((uint8_t*)&kb_report, sizeof(kb_report)) == USBD_OK) {
+            memcpy(&prev_kb_report, &kb_report, sizeof(kb_report));
+        }
+    }
+
     if (mode == GPIO_PIN_SET) { // Gamepad Mode
-        USB_SendReport((uint8_t*)&gp_report, sizeof(gp_report));
-        USB_SendReport((uint8_t*)&kb_report, sizeof(kb_report));
+        if (memcmp(&gp_report, &prev_gp_report, sizeof(gp_report)) != 0) {
+            if (USB_SendReport((uint8_t*)&gp_report, sizeof(gp_report)) == USBD_OK) {
+                memcpy(&prev_gp_report, &gp_report, sizeof(gp_report));
+            }
+        }
     } else { // Mouse Mode
         mouse_report.buttons = 0;
         int8_t mx = (int8_t)adc_values[4] - 127;
@@ -198,7 +207,8 @@ void IO_Control_Process(void) {
         mouse_report.y = my / 8;
         mouse_report.wheel = wheel / 16;
         
-        USB_SendReport((uint8_t*)&mouse_report, sizeof(mouse_report));
-        USB_SendReport((uint8_t*)&kb_report, sizeof(kb_report));
+        if (mouse_report.x != 0 || mouse_report.y != 0 || mouse_report.wheel != 0) {
+            USB_SendReport((uint8_t*)&mouse_report, sizeof(mouse_report));
+        }
     }
 }

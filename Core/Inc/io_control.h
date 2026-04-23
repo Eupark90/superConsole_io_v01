@@ -6,14 +6,14 @@
 #define NUM_COLUMNS 14
 #define NUM_ROWS 7
 
-typedef struct {
+typedef struct __attribute__((packed)) {
     uint8_t report_id;
     uint8_t modifiers;
     uint8_t reserved;
     uint8_t keycodes[6];
 } KeyboardReport_t;
 
-typedef struct {
+typedef struct __attribute__((packed)) {
     uint8_t report_id;
     uint8_t buttons;
     int8_t x;
@@ -21,7 +21,7 @@ typedef struct {
     int8_t wheel;
 } MouseReport_t;
 
-typedef struct {
+typedef struct __attribute__((packed)) {
     uint8_t report_id;
     uint16_t buttons;
     uint8_t lx;
