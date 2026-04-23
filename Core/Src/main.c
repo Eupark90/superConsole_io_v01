@@ -224,8 +224,8 @@ static void MX_ADC_Init(void)
   */
   sConfig.Channel = ADC_CHANNEL_0;
   sConfig.Rank = ADC_RANK_CHANNEL_NUMBER;
-  /* 239.5 cycles at 14MHz = ~17us: required for ~10kOhm joystick/hall source impedance */
-  sConfig.SamplingTime = ADC_SAMPLETIME_239CYCLES_5;
+  /* 55.5 cycles at 14MHz = ~4us: sufficient for 8-bit output from ~10kOhm source */
+  sConfig.SamplingTime = ADC_SAMPLETIME_55CYCLES_5;
   if (HAL_ADC_ConfigChannel(&hadc, &sConfig) != HAL_OK)
   {
     Error_Handler();

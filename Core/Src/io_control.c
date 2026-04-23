@@ -173,64 +173,72 @@ void IO_Control_Process(void) {
         }
     }
 
-    Read_ADC();
-    gp_report.l2 = adc_values[0];
-    gp_report.lx = adc_values[1];
-    gp_report.ly = 255 - adc_values[2]; // Y-axis inverted
-    gp_report.ry = 255 - adc_values[3]; // Y-axis inverted
-    gp_report.rx = adc_values[4];
-    gp_report.r2 = adc_values[5];
-
-    // Only send if changed or mode requires
+    /* --- KEYBOARD: send immediately after matrix scan, before any ADC blocking --- */
     if (memcmp(&kb_report, &prev_kb_report, sizeof(kb_report)) != 0) {
         if (USB_SendReport((uint8_t*)&kb_report, sizeof(kb_report)) == USBD_OK) {
             memcpy(&prev_kb_report, &kb_report, sizeof(kb_report));
         }
     }
 
-    if (mode == GPIO_PIN_SET) { // Gamepad Mode
-        if (memcmp(&gp_report, &prev_gp_report, sizeof(gp_report)) != 0) {
-            if (USB_SendReport((uint8_t*)&gp_report, sizeof(gp_report)) == USBD_OK) {
-                memcpy(&prev_gp_report, &gp_report, sizeof(gp_report));
+    /* --- ANALOG: rate-limited to 8ms (125 Hz). ADC blocks ~29us per call so
+       keeping it off the keyboard path eliminates the main latency source. --- */
+    static uint32_t last_adc_ms = 0;
+    uint32_t now = HAL_GetTick();
+    if (now - last_adc_ms >= 8) {
+        last_adc_ms = now;
+
+        Read_ADC();
+        gp_report.l2 = adc_values[0];
+        gp_report.lx = adc_values[1];
+        gp_report.ly = 255 - adc_values[2]; // Y-axis inverted
+        gp_report.ry = 255 - adc_values[3]; // Y-axis inverted
+        gp_report.rx = adc_values[4];
+        gp_report.r2 = adc_values[5];
+
+        if (mode == GPIO_PIN_SET) { // Gamepad Mode
+            if (memcmp(&gp_report, &prev_gp_report, sizeof(gp_report)) != 0) {
+                if (USB_SendReport((uint8_t*)&gp_report, sizeof(gp_report)) == USBD_OK) {
+                    memcpy(&prev_gp_report, &gp_report, sizeof(gp_report));
+                }
             }
-        }
-    } else { // Mouse Mode
-        uint8_t mouse_buttons = 0;
+        } else { // Mouse Mode
+            uint8_t mouse_buttons = 0;
 
-        /* R1 (digital matrix button) -> left click */
-        if (gp_report.buttons & (1 << GP_R1)) {
-            mouse_buttons |= 0x01;
-        }
-        /* R2 analog trigger (PA5, Hall sensor) -> right click.
-           Threshold: deviation >64 from center(128) handles both sensor polarities. */
-        if (adc_values[5] > 192 || adc_values[5] < 64) {
-            mouse_buttons |= 0x02;
-        }
-        /* L3 (left stick click) -> middle button / wheel click */
-        if (gp_report.buttons & (1 << GP_L3)) {
-            mouse_buttons |= 0x04;
-        }
+            /* R1 (digital matrix button) -> left click */
+            if (gp_report.buttons & (1 << GP_R1)) {
+                mouse_buttons |= 0x01;
+            }
+            /* R2 analog trigger (PA5, Hall sensor) -> right click.
+               Threshold: deviation >64 from center(128) handles both sensor polarities. */
+            if (adc_values[5] > 192 || adc_values[5] < 64) {
+                mouse_buttons |= 0x02;
+            }
+            /* L3 (left stick click) -> middle button / wheel click */
+            if (gp_report.buttons & (1 << GP_L3)) {
+                mouse_buttons |= 0x04;
+            }
 
-        mouse_report.buttons = mouse_buttons;
+            mouse_report.buttons = mouse_buttons;
 
-        int8_t mx    = (int8_t)((int16_t)adc_values[4] - 128);
-        int8_t my    = (int8_t)(128 - (int16_t)adc_values[3]); // Y-axis inverted
-        int8_t wheel = (int8_t)((int16_t)adc_values[2] - 128); // direction: push up = scroll up
+            int8_t mx    = (int8_t)((int16_t)adc_values[4] - 128);
+            int8_t my    = (int8_t)(128 - (int16_t)adc_values[3]); // Y-axis inverted
+            int8_t wheel = (int8_t)((int16_t)adc_values[2] - 128); // direction: push up = scroll up
 
-        /* Deadzone ±25/128: covers joystick mechanical center variation and ADC noise */
-        if (mx    >= -25 && mx    <= 25) mx    = 0;
-        if (my    >= -25 && my    <= 25) my    = 0;
-        if (wheel >= -25 && wheel <= 25) wheel = 0;
+            /* Deadzone ±25/128: covers joystick mechanical center variation and ADC noise */
+            if (mx    >= -25 && mx    <= 25) mx    = 0;
+            if (my    >= -25 && my    <= 25) my    = 0;
+            if (wheel >= -25 && wheel <= 25) wheel = 0;
 
-        mouse_report.x     = mx    / 8;
-        mouse_report.y     = my    / 8;
-        mouse_report.wheel = wheel / 32;
+            mouse_report.x     = mx    / 8;
+            mouse_report.y     = my    / 8;
+            mouse_report.wheel = wheel / 32;
 
-        /* Send on movement OR button state change (button-only clicks must not be dropped) */
-        if (mouse_report.x != 0 || mouse_report.y != 0 || mouse_report.wheel != 0 ||
-            mouse_report.buttons != prev_mouse_buttons) {
-            USB_SendReport((uint8_t*)&mouse_report, sizeof(mouse_report));
-            prev_mouse_buttons = mouse_report.buttons;
+            /* Send on movement OR button state change */
+            if (mouse_report.x != 0 || mouse_report.y != 0 || mouse_report.wheel != 0 ||
+                mouse_report.buttons != prev_mouse_buttons) {
+                USB_SendReport((uint8_t*)&mouse_report, sizeof(mouse_report));
+                prev_mouse_buttons = mouse_report.buttons;
+            }
         }
     }
 }
