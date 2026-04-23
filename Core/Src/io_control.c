@@ -215,7 +215,7 @@ void IO_Control_Process(void) {
 
         int8_t mx    = (int8_t)((int16_t)adc_values[4] - 128);
         int8_t my    = (int8_t)(128 - (int16_t)adc_values[3]); // Y-axis inverted
-        int8_t wheel = (int8_t)(128 - (int16_t)adc_values[2]); // Y-axis inverted
+        int8_t wheel = (int8_t)((int16_t)adc_values[2] - 128); // direction: push up = scroll up
 
         /* Deadzone ±25/128: covers joystick mechanical center variation and ADC noise */
         if (mx    >= -25 && mx    <= 25) mx    = 0;
@@ -224,7 +224,7 @@ void IO_Control_Process(void) {
 
         mouse_report.x     = mx    / 8;
         mouse_report.y     = my    / 8;
-        mouse_report.wheel = wheel / 16;
+        mouse_report.wheel = wheel / 32;
 
         /* Send on movement OR button state change (button-only clicks must not be dropped) */
         if (mouse_report.x != 0 || mouse_report.y != 0 || mouse_report.wheel != 0 ||
