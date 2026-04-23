@@ -140,10 +140,14 @@ void IO_Control_Process(void) {
     uint8_t fn_pressed = 0;
 
     for (int c = 0; c < NUM_COLUMNS; c++) {
-        HAL_GPIO_WritePin(column_ports[c], column_pins[c], GPIO_PIN_RESET);
-        HAL_Delay(1);
+        /* Drive column HIGH: diode (A=column, K=switch side) forward-biases,
+           allowing current to reach the row when switch is closed */
+        HAL_GPIO_WritePin(column_ports[c], column_pins[c], GPIO_PIN_SET);
+        /* Short settle time for signal to propagate */
+        __NOP(); __NOP(); __NOP(); __NOP();
         for (int r = 0; r < NUM_ROWS; r++) {
-            if (HAL_GPIO_ReadPin(row_ports[r], row_pins[r]) == GPIO_PIN_RESET) {
+            /* Row reads HIGH when key is pressed (pulled up through diode+switch) */
+            if (HAL_GPIO_ReadPin(row_ports[r], row_pins[r]) == GPIO_PIN_SET) {
                 KeyMap_t key = keymap[c][r];
                 switch (key.type) {
                     case TYPE_KEYBOARD:
@@ -162,7 +166,8 @@ void IO_Control_Process(void) {
                 }
             }
         }
-        HAL_GPIO_WritePin(column_ports[c], column_pins[c], GPIO_PIN_SET);
+        /* Restore column LOW (inactive) before scanning next column */
+        HAL_GPIO_WritePin(column_ports[c], column_pins[c], GPIO_PIN_RESET);
     }
 
     if (fn_pressed) {
@@ -195,9 +200,9 @@ void IO_Control_Process(void) {
         }
     } else { // Mouse Mode
         mouse_report.buttons = 0;
-        int8_t mx = (int8_t)adc_values[4] - 127;
-        int8_t my = (int8_t)adc_values[3] - 127;
-        int8_t wheel = (int8_t)adc_values[2] - 127;
+        int8_t mx = (int8_t)((int16_t)adc_values[4] - 128);
+        int8_t my = (int8_t)((int16_t)adc_values[3] - 128);
+        int8_t wheel = (int8_t)((int16_t)adc_values[2] - 128);
         
         if (mx > -10 && mx < 10) mx = 0;
         if (my > -10 && my < 10) my = 0;

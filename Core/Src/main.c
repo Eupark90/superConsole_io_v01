@@ -373,18 +373,16 @@ static void MX_GPIO_Init(void)
   __HAL_RCC_GPIOD_CLK_ENABLE();
 
   /*Configure GPIO pin Output Level */
+  /* LEDs, OLED reset, and all column pins start LOW (columns inactive = LOW) */
   HAL_GPIO_WritePin(GPIOC, Mode_Pin|ScrollLock_Pin|CapsLock_Pin|NumLock_Pin
                           |Column_10_Pin|Column_09_Pin|Column_08_Pin, GPIO_PIN_RESET);
 
-  /*Configure GPIO pin Output Level */
   HAL_GPIO_WritePin(GPIOA, Column_13_Pin|Column_11_Pin, GPIO_PIN_RESET);
 
-  /*Configure GPIO pin Output Level */
   HAL_GPIO_WritePin(GPIOB, Column_12_Pin|OLED_RST_Pin|Cplumn_06_Pin|Column_05_Pin
                           |Column_04_Pin|Column_03_Pin|Column_02_Pin|Column_01_Pin
                           |Column_00_Pin, GPIO_PIN_RESET);
 
-  /*Configure GPIO pin Output Level */
   HAL_GPIO_WritePin(Column_07_GPIO_Port, Column_07_Pin, GPIO_PIN_RESET);
 
   /*Configure GPIO pin : Mode_Switch_Pin */
@@ -409,22 +407,25 @@ static void MX_GPIO_Init(void)
   GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
   HAL_GPIO_Init(GPIOA, &GPIO_InitStruct);
 
+  /* Rows use PULL-DOWN: diode anode is at column (driven HIGH to scan),
+     cathode side connects through switch to row. When switch is pressed,
+     row is pulled HIGH through the forward-biased diode. */
   /*Configure GPIO pin : Row_00_Pin */
   GPIO_InitStruct.Pin = Row_00_Pin;
   GPIO_InitStruct.Mode = GPIO_MODE_INPUT;
-  GPIO_InitStruct.Pull = GPIO_PULLUP;
+  GPIO_InitStruct.Pull = GPIO_PULLDOWN;
   HAL_GPIO_Init(Row_00_GPIO_Port, &GPIO_InitStruct);
 
   /*Configure GPIO pins : Row_01_Pin Row_02_Pin */
   GPIO_InitStruct.Pin = Row_01_Pin|Row_02_Pin;
   GPIO_InitStruct.Mode = GPIO_MODE_INPUT;
-  GPIO_InitStruct.Pull = GPIO_PULLUP;
+  GPIO_InitStruct.Pull = GPIO_PULLDOWN;
   HAL_GPIO_Init(GPIOC, &GPIO_InitStruct);
 
   /*Configure GPIO pins : Row_03_Pin Row_04_Pin Row_05_Pin Row_06_Pin */
   GPIO_InitStruct.Pin = Row_03_Pin|Row_04_Pin|Row_05_Pin|Row_06_Pin;
   GPIO_InitStruct.Mode = GPIO_MODE_INPUT;
-  GPIO_InitStruct.Pull = GPIO_PULLUP;
+  GPIO_InitStruct.Pull = GPIO_PULLDOWN;
   HAL_GPIO_Init(GPIOB, &GPIO_InitStruct);
 
   /*Configure GPIO pins : Column_12_Pin OLED_RST_Pin Cplumn_06_Pin Column_05_Pin
