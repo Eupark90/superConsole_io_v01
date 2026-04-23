@@ -155,9 +155,7 @@ __ALIGN_BEGIN static uint8_t USBD_CUSTOM_HID_CfgFSDesc[USB_CUSTOM_HID_CONFIG_DES
     0x04,                   /* bInterval: 4 ms (gamepad axes, 250 Hz sufficient) */
 };
 
-/* HS and OtherSpeed share the same layout — copy at compile time via same array */
-__ALIGN_BEGIN static uint8_t USBD_CUSTOM_HID_CfgHSDesc[USB_CUSTOM_HID_CONFIG_DESC_SIZ] __ALIGN_END;
-__ALIGN_BEGIN static uint8_t USBD_CUSTOM_HID_OtherSpeedCfgDesc[USB_CUSTOM_HID_CONFIG_DESC_SIZ] __ALIGN_END;
+/* HS and OtherSpeed: STM32F072 is FS-only; return FS descriptor for both */
 
 /* Device qualifier (required for HS-capable devices) */
 __ALIGN_BEGIN static uint8_t USBD_CUSTOM_HID_DeviceQualifierDesc[USB_LEN_DEV_QUALIFIER_DESC] __ALIGN_END = {
@@ -220,12 +218,6 @@ static uint8_t USBD_CUSTOM_HID_Init(USBD_HandleTypeDef *pdev, uint8_t cfgidx)
     /* Arm the keyboard LED OUT endpoint */
     USBD_LL_PrepareReceive(pdev, CUSTOM_HID_EPOUT_ADDR,
                            hhid->Report_buf, USBD_CUSTOMHID_OUTREPORT_BUF_SIZE);
-
-    /* Copy FS descriptor to HS / OtherSpeed arrays (same timing) */
-    for (uint16_t i = 0; i < USB_CUSTOM_HID_CONFIG_DESC_SIZ; i++) {
-        USBD_CUSTOM_HID_CfgHSDesc[i]         = USBD_CUSTOM_HID_CfgFSDesc[i];
-        USBD_CUSTOM_HID_OtherSpeedCfgDesc[i] = USBD_CUSTOM_HID_CfgFSDesc[i];
-    }
 
     return USBD_OK;
 }
@@ -424,14 +416,14 @@ static uint8_t *USBD_CUSTOM_HID_GetFSCfgDesc(uint16_t *length)
 
 static uint8_t *USBD_CUSTOM_HID_GetHSCfgDesc(uint16_t *length)
 {
-    *length = sizeof(USBD_CUSTOM_HID_CfgHSDesc);
-    return USBD_CUSTOM_HID_CfgHSDesc;
+    *length = sizeof(USBD_CUSTOM_HID_CfgFSDesc);
+    return USBD_CUSTOM_HID_CfgFSDesc;
 }
 
 static uint8_t *USBD_CUSTOM_HID_GetOtherSpeedCfgDesc(uint16_t *length)
 {
-    *length = sizeof(USBD_CUSTOM_HID_OtherSpeedCfgDesc);
-    return USBD_CUSTOM_HID_OtherSpeedCfgDesc;
+    *length = sizeof(USBD_CUSTOM_HID_CfgFSDesc);
+    return USBD_CUSTOM_HID_CfgFSDesc;
 }
 
 static uint8_t *USBD_CUSTOM_HID_GetDeviceQualifierDesc(uint16_t *length)

@@ -64,11 +64,11 @@
 
 #define USBD_VID     1155
 #define USBD_LANGID_STRING     1033
-#define USBD_MANUFACTURER_STRING     "STMicroelectronics"
-#define USBD_PID_FS     22352
-#define USBD_PRODUCT_STRING_FS     "STM32 Custom Human interface"
-#define USBD_CONFIGURATION_STRING_FS     "Custom HID Config"
-#define USBD_INTERFACE_STRING_FS     "Custom HID Interface"
+#define USBD_MANUFACTURER_STRING     "superConsole"
+#define USBD_PID_FS     22360   /* Changed from 22352: forces OS re-enumeration after composite HID restructure */
+#define USBD_PRODUCT_STRING_FS     "superConsole IO"
+#define USBD_CONFIGURATION_STRING_FS     "Composite HID"
+#define USBD_INTERFACE_STRING_FS     "HID Interface"
 
 /* USER CODE BEGIN PRIVATE_DEFINES */
 

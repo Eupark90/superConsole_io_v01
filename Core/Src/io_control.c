@@ -95,10 +95,11 @@ static const uint16_t column_pins[NUM_COLUMNS] = {
 /* Row pins (R0=PA7, R1=PC4, R2=PC5, R3=PB0, R4=PB1, R5=PB2, R6=PB10)
    Read all rows via 3 IDR register reads per column scan. */
 
-/* Debounce: mechanical switches bounce 5-20ms. Accept a state change only
-   after the raw reading has been stable for DEBOUNCE_MS consecutive ms.
+/* Asymmetric debounce: press is accepted after 2ms stable (fast response),
+   release after 6ms (prevents phantom release from switch bounce).
    Per-column bitmask — one bit per row (bits 0-6). */
-#define DEBOUNCE_MS 8
+#define DEBOUNCE_PRESS_MS   2
+#define DEBOUNCE_RELEASE_MS 6
 static uint8_t  db_state[NUM_COLUMNS]; // last accepted (debounced) bitmask
 static uint8_t  db_raw  [NUM_COLUMNS]; // last raw bitmask
 static uint32_t db_time [NUM_COLUMNS]; // tick when db_raw last changed
@@ -178,13 +179,18 @@ void IO_Control_Process(void) {
         if (idrB & GPIO_PIN_2)  raw |= (1 << 5);
         if (idrB & GPIO_PIN_10) raw |= (1 << 6);
 
-        /* Debounce: only accept raw when it has been stable for DEBOUNCE_MS */
+        /* Asymmetric debounce: detect which direction changed.
+           Press (new bit = 1) uses fast threshold; release uses slower one. */
         if (raw != db_raw[c]) {
             db_raw[c]  = raw;
             db_time[c] = now;
         }
-        if (db_raw[c] != db_state[c] && (now - db_time[c]) >= DEBOUNCE_MS) {
-            db_state[c] = db_raw[c];
+        if (db_raw[c] != db_state[c]) {
+            uint8_t is_press = (db_raw[c] & ~db_state[c]) != 0;
+            uint32_t ms = is_press ? DEBOUNCE_PRESS_MS : DEBOUNCE_RELEASE_MS;
+            if ((now - db_time[c]) >= ms) {
+                db_state[c] = db_raw[c];
+            }
         }
 
         /* Apply the debounced state to reports */
