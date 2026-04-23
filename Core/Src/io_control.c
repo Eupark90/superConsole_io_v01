@@ -12,6 +12,7 @@ static GamepadReport_t gp_report;
 
 static KeyboardReport_t prev_kb_report;
 static GamepadReport_t prev_gp_report;
+static uint8_t prev_mouse_buttons;
 
 // Helper to wait until USB is ready to send another report
 static int8_t USB_SendReport(uint8_t *report, uint16_t len) {
@@ -115,6 +116,7 @@ void IO_Control_Init(void) {
     
     memcpy(&prev_kb_report, &kb_report, sizeof(kb_report));
     memcpy(&prev_gp_report, &gp_report, sizeof(gp_report));
+    prev_mouse_buttons = 0;
 }
 
 static uint8_t adc_values[6];
@@ -199,7 +201,21 @@ void IO_Control_Process(void) {
             }
         }
     } else { // Mouse Mode
-        mouse_report.buttons = 0;
+        uint8_t mouse_buttons = 0;
+
+        /* R1 (digital matrix button) -> left click */
+        if (gp_report.buttons & (1 << GP_R1)) {
+            mouse_buttons |= 0x01;
+        }
+
+        /* R2 analog trigger (PA5, Hall sensor) -> right click.
+           Center is ~128. Threshold: deviation > 64 from center handles both sensor polarities. */
+        if (adc_values[5] > 192 || adc_values[5] < 64) {
+            mouse_buttons |= 0x02;
+        }
+
+        mouse_report.buttons = mouse_buttons;
+
         int8_t mx = (int8_t)((int16_t)adc_values[4] - 128);
         int8_t my = (int8_t)((int16_t)adc_values[3] - 128);
         int8_t wheel = (int8_t)((int16_t)adc_values[2] - 128);
@@ -208,13 +224,16 @@ void IO_Control_Process(void) {
         if (mx >= -25 && mx <= 25) mx = 0;
         if (my >= -25 && my <= 25) my = 0;
         if (wheel >= -25 && wheel <= 25) wheel = 0;
-        
+
         mouse_report.x = mx / 8;
         mouse_report.y = my / 8;
         mouse_report.wheel = wheel / 16;
-        
-        if (mouse_report.x != 0 || mouse_report.y != 0 || mouse_report.wheel != 0) {
+
+        /* Send on movement OR button state change (button-only clicks must not be dropped) */
+        if (mouse_report.x != 0 || mouse_report.y != 0 || mouse_report.wheel != 0 ||
+            mouse_report.buttons != prev_mouse_buttons) {
             USB_SendReport((uint8_t*)&mouse_report, sizeof(mouse_report));
+            prev_mouse_buttons = mouse_report.buttons;
         }
     }
 }
