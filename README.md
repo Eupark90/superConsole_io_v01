@@ -140,6 +140,75 @@ Run → Start Debugging  (F5)
 
 ---
 
+## 버그 수정 및 변경 이력
+
+### [fix] PMA BTable 충돌 → 게임패드 버튼 미작동 (`usbd_conf.c`)
+
+**증상**: 키보드·마우스는 정상, 게임패드 버튼 입력이 전혀 없음
+
+**원인**: STM32F0 USB 하드웨어는 PMA 오프셋 0x00부터 BTable을 배치합니다.
+각 엔드포인트는 8바이트 항목을 가지며, EP3의 항목은 **PMA 0x18–0x1F**에 위치합니다.
+기존 코드는 EP0 OUT 버퍼도 **PMA 0x18**에 배치하여 두 용도가 완전히 겹쳤습니다.
+Windows가 열거(enumeration) 중 SET_IDLE, SET_PROTOCOL 등 SETUP 패킷을 보낼 때마다
+8바이트가 PMA 0x18에 기록되어 **EP3의 TX 버퍼 주소와 전송 카운트가 파괴**되었습니다.
+EP1(키보드)·EP2(마우스) BTable은 각각 0x08, 0x10에 있어 충돌 범위 밖이므로 정상 동작했습니다.
+
+| BTable 항목 | PMA 주소 | 이전 EP0 OUT 버퍼 | 충돌 여부 |
+|---|---|---|---|
+| EP1 BTable | 0x08–0x0F | 시작 0x18 → 범위 밖 | 없음 ✓ |
+| EP2 BTable | 0x10–0x17 | 시작 0x18 → 범위 밖 | 없음 ✓ |
+| **EP3 BTable** | **0x18–0x1F** | **시작 0x18 → 완전 겹침** | **충돌 ✗** |
+
+**수정**: 모든 PMA 버퍼를 BTable 영역(0x00–0x3F) 이후로 이동
+
+```
+이전: EP0 OUT@0x18 / EP0 IN@0x58 / EP1 IN@0x98 / EP1 OUT@0xA8 / EP2 IN@0xB8 / EP3 IN@0xC8
+수정: EP0 OUT@0x40 / EP0 IN@0x80 / EP1 IN@0xC0 / EP1 OUT@0xD0 / EP2 IN@0xE0 / EP3 IN@0xF0
+```
+
+---
+
+### [feat] 단일 엔드포인트 복합 HID → 3 인터페이스 독립 엔드포인트 (`usbd_customhid.*`, `usbd_custom_hid_if.c`)
+
+**증상**: 키보드 입력이 지연되거나 누락됨
+
+**원인**: 키보드·마우스·게임패드가 EP1 IN 하나를 공유하고 `state` 플래그도 하나뿐이었습니다.
+마우스/게임패드 전송 중 EP1이 BUSY 상태면 키보드 리포트가 `USBD_BUSY`로 전부 버려졌습니다.
+
+**수정**:
+- Interface 0 (Keyboard): EP1 IN + EP1 OUT 독립 할당
+- Interface 1 (Mouse): EP2 IN 독립 할당
+- Interface 2 (Gamepad): EP3 IN 독립 할당
+- `state[3]` 배열로 인터페이스별 전송 상태 분리
+- Report Descriptor 3개 분리 (Report ID 없음)
+- `SendReport(itf_idx, ...)` 인터페이스 인덱스 기반으로 재설계
+
+---
+
+### [fix] 비대칭 디바운스 도입 (`io_control.c`)
+
+**증상**: 키보드 입력 지연
+
+**원인**: 8ms 균일 디바운스 적용 → 모든 키 입력에 최소 8ms 지연 누적
+
+**수정**: Press / Release 방향을 분리하여 서로 다른 임계값 적용
+
+| 방향 | 임계값 | 목적 |
+|---|---|---|
+| Press (눌림) | 2ms | 빠른 응답 |
+| Release (놓음) | 6ms | 반동(바운스)으로 인한 오입력 방지 |
+
+---
+
+### [fix] USB PID 변경 → Windows 드라이버 재열거 강제 (`usbd_desc.c`)
+
+단일 인터페이스(구 펌웨어) → 3 인터페이스(신 펌웨어)로 구조가 바뀐 후에도
+Windows가 VID/PID가 동일하면 캐시된 드라이버를 재사용하여 인터페이스 수 불일치 발생.
+
+PID를 `0x5750` → `0x5758` (22360)으로 변경하여 Windows가 새 장치로 인식하도록 강제.
+
+---
+
 ## Windows 최초 연결 시 주의사항
 
 이전에 동일 VID/PID로 구 펌웨어(단일 HID 인터페이스)를 사용한 적이 있다면, Windows가 캐시된 드라이버를 사용해 정상 인식되지 않을 수 있습니다.
