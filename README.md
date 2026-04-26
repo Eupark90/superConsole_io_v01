@@ -84,7 +84,7 @@ Interface 2 — Gamepad   EP3 IN  (4ms)  8 bytes  16 buttons + 6 axes (LX/LY/RX/
 
 - Report ID 없음 — 인터페이스당 단일 리포트
 - Configuration Descriptor: 91 bytes
-- PMA 배치: EP1 IN @ 0x98 / EP1 OUT @ 0xA8 / EP2 IN @ 0xB8 / EP3 IN @ 0xC8
+- PMA 배치: EP0 OUT @ 0x40 / EP0 IN @ 0x80 / EP1 IN @ 0xC0 / EP1 OUT @ 0xD0 / EP2 IN @ 0xE0 / EP3 IN @ 0xF0
 
 ---
 
