@@ -32,6 +32,9 @@ set(MX_Application_Src
     ${CMAKE_CURRENT_SOURCE_DIR}/../../Core/Src/stm32f0xx_hal_msp.c
     ${CMAKE_CURRENT_SOURCE_DIR}/../../Core/Src/sysmem.c
     ${CMAKE_CURRENT_SOURCE_DIR}/../../Core/Src/syscalls.c
+    ${CMAKE_CURRENT_SOURCE_DIR}/../../Core/Src/backlight_control.c
+    ${CMAKE_CURRENT_SOURCE_DIR}/../../Core/Src/battery_monitor.c
+    ${CMAKE_CURRENT_SOURCE_DIR}/../../Core/Src/oled_display.c
     ${CMAKE_CURRENT_SOURCE_DIR}/../../Core/Src/io_control.c
     ${CMAKE_CURRENT_SOURCE_DIR}/../../startup_stm32f072xb.s
 )

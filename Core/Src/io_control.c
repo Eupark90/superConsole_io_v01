@@ -1,3 +1,4 @@
+#include "backlight_control.h"
 #include "io_control.h"
 #include "usbd_custom_hid_if.h"
 #include "usbd_customhid.h"
@@ -13,6 +14,7 @@ static GamepadReport_t gp_report;
 static KeyboardReport_t prev_kb_report;
 static GamepadReport_t prev_gp_report;
 static uint8_t prev_mouse_buttons;
+static uint16_t prev_brightness_buttons;
 
 /* Non-blocking send to one of the three independent HID endpoints.
    itf_idx: 0=Keyboard, 1=Mouse, 2=Gamepad */
@@ -67,7 +69,7 @@ typedef struct {
 
 static const KeyMap_t keymap[NUM_COLUMNS][NUM_ROWS] = {
     {{TYPE_GAMEPAD, GP_L1}, {TYPE_KEYBOARD, 0x29}, {TYPE_KEYBOARD, 0x35}, {TYPE_KEYBOARD, 0x2B}, {TYPE_KEYBOARD, 0x39}, {TYPE_MODIFIER, MOD_LSHIFT}, {TYPE_MODIFIER, MOD_LCTRL}}, // C0
-    {{TYPE_GAMEPAD, GP_L3}, {TYPE_KEYBOARD, 0x3A}, {TYPE_KEYBOARD, 0x1E}, {TYPE_KEYBOARD, 0x14}, {TYPE_KEYBOARD, 0x04}, {TYPE_KEYBOARD, 0x1D}, {TYPE_MODIFIER, MOD_LGUI}}, // C1
+    {{TYPE_GAMEPAD, GP_L2}, {TYPE_KEYBOARD, 0x3A}, {TYPE_KEYBOARD, 0x1E}, {TYPE_KEYBOARD, 0x14}, {TYPE_KEYBOARD, 0x04}, {TYPE_KEYBOARD, 0x1D}, {TYPE_MODIFIER, MOD_LGUI}}, // C1
     {{TYPE_GAMEPAD, GP_LEFT}, {TYPE_KEYBOARD, 0x3B}, {TYPE_KEYBOARD, 0x1F}, {TYPE_KEYBOARD, 0x1A}, {TYPE_KEYBOARD, 0x16}, {TYPE_KEYBOARD, 0x1B}, {TYPE_MODIFIER, MOD_LALT}}, // C2
     {{TYPE_GAMEPAD, GP_UP}, {TYPE_KEYBOARD, 0x3C}, {TYPE_KEYBOARD, 0x20}, {TYPE_KEYBOARD, 0x08}, {TYPE_KEYBOARD, 0x07}, {TYPE_KEYBOARD, 0x06}, {TYPE_KEYBOARD, 0x2C}}, // C3
     {{TYPE_GAMEPAD, GP_DOWN}, {TYPE_KEYBOARD, 0x3D}, {TYPE_KEYBOARD, 0x21}, {TYPE_KEYBOARD, 0x15}, {TYPE_KEYBOARD, 0x09}, {TYPE_KEYBOARD, 0x19}, {TYPE_MODIFIER, MOD_RALT}}, // C4
@@ -78,19 +80,36 @@ static const KeyMap_t keymap[NUM_COLUMNS][NUM_ROWS] = {
     {{TYPE_GAMEPAD, GP_Y}, {TYPE_KEYBOARD, 0x42}, {TYPE_KEYBOARD, 0x26}, {TYPE_KEYBOARD, 0x12}, {TYPE_KEYBOARD, 0x0F}, {TYPE_KEYBOARD, 0x37}, {TYPE_KEYBOARD, 0x50}}, // C9
     {{TYPE_GAMEPAD, GP_A}, {TYPE_KEYBOARD, 0x43}, {TYPE_KEYBOARD, 0x27}, {TYPE_KEYBOARD, 0x13}, {TYPE_KEYBOARD, 0x33}, {TYPE_KEYBOARD, 0x38}, {TYPE_KEYBOARD, 0x51}}, // C10
     {{TYPE_GAMEPAD, GP_B}, {TYPE_KEYBOARD, 0x44}, {TYPE_KEYBOARD, 0x2D}, {TYPE_KEYBOARD, 0x2F}, {TYPE_KEYBOARD, 0x34}, {TYPE_MODIFIER, MOD_RSHIFT}, {TYPE_KEYBOARD, 0x4F}}, // C11
-    {{TYPE_GAMEPAD, GP_R3}, {TYPE_KEYBOARD, 0x45}, {TYPE_KEYBOARD, 0x2E}, {TYPE_KEYBOARD, 0x30}, {TYPE_KEYBOARD, 0x28}, {TYPE_KEYBOARD, 0x52}, {TYPE_KEYBOARD, 0x4B}}, // C12
-    {{TYPE_GAMEPAD, GP_R1}, {TYPE_KEYBOARD, 0x4C}, {TYPE_KEYBOARD, 0x2A}, {TYPE_KEYBOARD, 0x31}, {TYPE_KEYBOARD, 0x4A}, {TYPE_KEYBOARD, 0x4D}, {TYPE_KEYBOARD, 0x4E}}, // C13
+    {{TYPE_GAMEPAD, GP_R2}, {TYPE_KEYBOARD, 0x45}, {TYPE_KEYBOARD, 0x2E}, {TYPE_KEYBOARD, 0x30}, {TYPE_KEYBOARD, 0x28}, {TYPE_KEYBOARD, 0x52}, {TYPE_NONE, 0}}, // C12
+    {{TYPE_GAMEPAD, GP_R1}, {TYPE_GAMEPAD, GP_L3}, {TYPE_KEYBOARD, 0x2A}, {TYPE_KEYBOARD, 0x31}, {TYPE_GAMEPAD, GP_R3}, {TYPE_KEYBOARD, 0x4D}, {TYPE_NONE, 0}}, // C13
 };
 
 static GPIO_TypeDef* const column_ports[NUM_COLUMNS] = {
-    GPIOB, GPIOB, GPIOB, GPIOB, GPIOB, GPIOB, GPIOB,
+    GPIOC, GPIOC, GPIOB, GPIOB, GPIOB, GPIOB, GPIOB,
     GPIOD, GPIOC, GPIOC, GPIOC, GPIOA, GPIOB, GPIOA
 };
 
 static const uint16_t column_pins[NUM_COLUMNS] = {
-    GPIO_PIN_9, GPIO_PIN_8, GPIO_PIN_7, GPIO_PIN_6, GPIO_PIN_5, GPIO_PIN_4, GPIO_PIN_3,
+    GPIO_PIN_14, GPIO_PIN_13, GPIO_PIN_7, GPIO_PIN_6, GPIO_PIN_5, GPIO_PIN_4, GPIO_PIN_3,
     GPIO_PIN_2, GPIO_PIN_12, GPIO_PIN_11, GPIO_PIN_10, GPIO_PIN_15, GPIO_PIN_11, GPIO_PIN_6
 };
+
+static __attribute__((always_inline)) inline
+void matrix_all_columns_low(void) {
+    GPIOA->BRR = GPIO_PIN_15 | GPIO_PIN_6;
+    GPIOB->BRR = GPIO_PIN_11 | GPIO_PIN_7 | GPIO_PIN_6 | GPIO_PIN_5 |
+                 GPIO_PIN_4 | GPIO_PIN_3;
+    GPIOC->BRR = GPIO_PIN_14 | GPIO_PIN_13 | GPIO_PIN_12 |
+                 GPIO_PIN_11 | GPIO_PIN_10;
+    GPIOD->BRR = GPIO_PIN_2;
+}
+
+static __attribute__((always_inline)) inline
+void matrix_settle_delay(void) {
+    for (volatile uint8_t i = 0; i < 96U; i++) {
+        __NOP();
+    }
+}
 
 /* Row pins (R0=PA7, R1=PC4, R2=PC5, R3=PB0, R4=PB1, R5=PB2, R6=PB10)
    Read all rows via 3 IDR register reads per column scan. */
@@ -125,16 +144,18 @@ void IO_Control_Init(void) {
     memcpy(&prev_kb_report, &kb_report, sizeof(kb_report));
     memcpy(&prev_gp_report, &gp_report, sizeof(gp_report));
     prev_mouse_buttons = 0;
+    prev_brightness_buttons = 0;
     memset(db_state, 0, sizeof(db_state));
     memset(db_raw,   0, sizeof(db_raw));
     memset(db_time,  0, sizeof(db_time));
+    matrix_all_columns_low();
 }
 
-static uint8_t adc_values[6];
+static uint8_t adc_values[4];
 
 void Read_ADC(void) {
     HAL_ADC_Start(&hadc);
-    for (int i = 0; i < 6; i++) {
+    for (int i = 0; i < 4; i++) {
         if (HAL_ADC_PollForConversion(&hadc, 10) == HAL_OK) {
             adc_values[i] = HAL_ADC_GetValue(&hadc) >> 4;
         }
@@ -154,13 +175,15 @@ void IO_Control_Process(void) {
 
     uint32_t now = HAL_GetTick();
 
+    matrix_all_columns_low();
+
     for (int c = 0; c < NUM_COLUMNS; c++) {
         GPIO_TypeDef *port = column_ports[c];
         uint16_t      pin  = column_pins[c];
 
         port->BSRR = pin;
-        /* 8 NOPs = ~167ns at 48MHz — enough for diode+switch+trace RC to settle */
-        __NOP(); __NOP(); __NOP(); __NOP(); __NOP(); __NOP(); __NOP(); __NOP();
+        /* PC13/PC14 are slower GPIOs; give the matrix about 2us to settle. */
+        matrix_settle_delay();
 
         /* 3 IDR reads capture all 7 rows simultaneously */
         uint32_t idrA = GPIOA->IDR;
@@ -204,10 +227,13 @@ void IO_Control_Process(void) {
         if (bits & (1 << 6)) apply_key(c, 6, &key_count, &fn_pressed);
     }
 
+    matrix_all_columns_low();
+
     if (fn_pressed) {
         for (int i = 0; i < 6; i++) {
             if (kb_report.keycodes[i] == 0x0C) kb_report.keycodes[i] = 0x46; // PrintScreen
             if (kb_report.keycodes[i] == 0x12) kb_report.keycodes[i] = 0x47; // Scroll Lock
+            if (kb_report.keycodes[i] == 0x2A) kb_report.keycodes[i] = 0x4C; // Delete
         }
     }
 
@@ -225,12 +251,12 @@ void IO_Control_Process(void) {
         last_adc_ms = now;
 
         Read_ADC();
-        gp_report.l2 = adc_values[0];
-        gp_report.lx = adc_values[1];
-        gp_report.ly = 255 - adc_values[2]; // Y-axis inverted
-        gp_report.ry = 255 - adc_values[3]; // Y-axis inverted
-        gp_report.rx = adc_values[4];
-        gp_report.r2 = adc_values[5];
+        gp_report.lx = adc_values[0];
+        gp_report.ly = 255 - adc_values[1]; // Y-axis inverted
+        gp_report.ry = 255 - adc_values[2]; // Y-axis inverted
+        gp_report.rx = adc_values[3];
+        gp_report.l2 = 0;
+        gp_report.r2 = 0;
 
         if (mode == GPIO_PIN_SET) { // Gamepad Mode
             if (memcmp(&gp_report, &prev_gp_report, sizeof(gp_report)) != 0) {
@@ -240,14 +266,23 @@ void IO_Control_Process(void) {
             }
         } else { // Mouse Mode
             uint8_t mouse_buttons = 0;
+            uint16_t brightness_buttons = gp_report.buttons & ((1u << GP_Y) | (1u << GP_A));
+            uint16_t pressed_brightness_buttons = brightness_buttons & ~prev_brightness_buttons;
 
-            /* R1 (digital matrix button) -> left click */
+            if (pressed_brightness_buttons & (1u << GP_Y)) {
+                Backlight_Increase();
+            }
+            if (pressed_brightness_buttons & (1u << GP_A)) {
+                Backlight_Decrease();
+            }
+            prev_brightness_buttons = brightness_buttons;
+
+            /* R1 digital matrix button -> left click */
             if (gp_report.buttons & (1 << GP_R1)) {
                 mouse_buttons |= 0x01;
             }
-            /* R2 analog trigger (PA5, Hall sensor) -> right click.
-               Threshold: deviation >64 from center(128) handles both sensor polarities. */
-            if (adc_values[5] > 192 || adc_values[5] < 64) {
+            /* R2 digital matrix button -> right click */
+            if (gp_report.buttons & (1 << GP_R2)) {
                 mouse_buttons |= 0x02;
             }
             /* L3 (left stick click) -> middle button / wheel click */
@@ -257,9 +292,9 @@ void IO_Control_Process(void) {
 
             mouse_report.buttons = mouse_buttons;
 
-            int8_t mx    = (int8_t)((int16_t)adc_values[4] - 128);
-            int8_t my    = (int8_t)(128 - (int16_t)adc_values[3]); // Y-axis inverted
-            int8_t wheel = (int8_t)((int16_t)adc_values[2] - 128); // direction: push up = scroll up
+            int8_t mx    = (int8_t)((int16_t)adc_values[3] - 128);
+            int8_t my    = (int8_t)(128 - (int16_t)adc_values[2]); // Y-axis inverted
+            int8_t wheel = (int8_t)((int16_t)adc_values[1] - 128); // direction: push up = scroll up
 
             /* Deadzone ±25/128: covers joystick mechanical center variation and ADC noise */
             if (mx    >= -25 && mx    <= 25) mx    = 0;

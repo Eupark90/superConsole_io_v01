@@ -22,7 +22,10 @@
 
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
+#include "backlight_control.h"
+#include "battery_monitor.h"
 #include "io_control.h"
+#include "oled_display.h"
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -43,6 +46,7 @@
 /* Private variables ---------------------------------------------------------*/
 ADC_HandleTypeDef hadc;
 
+I2C_HandleTypeDef hi2c1;
 I2C_HandleTypeDef hi2c2;
 
 UART_HandleTypeDef huart1;
@@ -55,6 +59,7 @@ UART_HandleTypeDef huart1;
 void SystemClock_Config(void);
 static void MX_GPIO_Init(void);
 static void MX_ADC_Init(void);
+static void MX_I2C1_Init(void);
 static void MX_I2C2_Init(void);
 static void MX_USART1_UART_Init(void);
 /* USER CODE BEGIN PFP */
@@ -97,6 +102,7 @@ int main(void)
   MX_GPIO_Init();
   MX_ADC_Init();
   MX_USB_DEVICE_Init();
+  MX_I2C1_Init();
   MX_I2C2_Init();
   MX_USART1_UART_Init();
   /* USER CODE BEGIN 2 */
@@ -105,6 +111,9 @@ int main(void)
   {
     Error_Handler();
   }
+  Backlight_Init();
+  BatteryMonitor_Init();
+  OLED_Display_Init();
   IO_Control_Init();
   /* USER CODE END 2 */
 
@@ -113,6 +122,8 @@ int main(void)
   while (1)
   {
     IO_Control_Process();
+    BatteryMonitor_Process();
+    OLED_Display_Process();
     /* USER CODE END WHILE */
 
     /* USER CODE BEGIN 3 */
@@ -156,8 +167,10 @@ void SystemClock_Config(void)
   {
     Error_Handler();
   }
-  PeriphClkInit.PeriphClockSelection = RCC_PERIPHCLK_USB|RCC_PERIPHCLK_USART1;
+  PeriphClkInit.PeriphClockSelection = RCC_PERIPHCLK_USB|RCC_PERIPHCLK_USART1
+                              |RCC_PERIPHCLK_I2C1;
   PeriphClkInit.Usart1ClockSelection = RCC_USART1CLKSOURCE_PCLK1;
+  PeriphClkInit.I2c1ClockSelection = RCC_I2C1CLKSOURCE_SYSCLK;
   PeriphClkInit.UsbClockSelection = RCC_USBCLKSOURCE_HSI48;
 
   if (HAL_RCCEx_PeriphCLKConfig(&PeriphClkInit) != HAL_OK)
@@ -222,16 +235,10 @@ static void MX_ADC_Init(void)
 
   /** Configure for the selected ADC regular channel to be converted.
   */
-  sConfig.Channel = ADC_CHANNEL_0;
+  sConfig.Channel = ADC_CHANNEL_1;
   sConfig.Rank = ADC_RANK_CHANNEL_NUMBER;
   /* 55.5 cycles at 14MHz = ~4us: sufficient for 8-bit output from ~10kOhm source */
   sConfig.SamplingTime = ADC_SAMPLETIME_55CYCLES_5;
-  if (HAL_ADC_ConfigChannel(&hadc, &sConfig) != HAL_OK)
-  {
-    Error_Handler();
-  }
-
-  sConfig.Channel = ADC_CHANNEL_1;
   if (HAL_ADC_ConfigChannel(&hadc, &sConfig) != HAL_OK)
   {
     Error_Handler();
@@ -255,14 +262,57 @@ static void MX_ADC_Init(void)
     Error_Handler();
   }
 
-  sConfig.Channel = ADC_CHANNEL_5;
-  if (HAL_ADC_ConfigChannel(&hadc, &sConfig) != HAL_OK)
-  {
-    Error_Handler();
-  }
   /* USER CODE BEGIN ADC_Init 2 */
 
   /* USER CODE END ADC_Init 2 */
+
+}
+
+/**
+  * @brief I2C1 Initialization Function
+  * @param None
+  * @retval None
+  */
+static void MX_I2C1_Init(void)
+{
+
+  /* USER CODE BEGIN I2C1_Init 0 */
+
+  /* USER CODE END I2C1_Init 0 */
+
+  /* USER CODE BEGIN I2C1_Init 1 */
+
+  /* USER CODE END I2C1_Init 1 */
+  hi2c1.Instance = I2C1;
+  hi2c1.Init.Timing = 0x20303E5D;
+  hi2c1.Init.OwnAddress1 = 0;
+  hi2c1.Init.AddressingMode = I2C_ADDRESSINGMODE_7BIT;
+  hi2c1.Init.DualAddressMode = I2C_DUALADDRESS_DISABLE;
+  hi2c1.Init.OwnAddress2 = 0;
+  hi2c1.Init.OwnAddress2Masks = I2C_OA2_NOMASK;
+  hi2c1.Init.GeneralCallMode = I2C_GENERALCALL_DISABLE;
+  hi2c1.Init.NoStretchMode = I2C_NOSTRETCH_DISABLE;
+  if (HAL_I2C_Init(&hi2c1) != HAL_OK)
+  {
+    Error_Handler();
+  }
+
+  /** Configure Analogue filter
+  */
+  if (HAL_I2CEx_ConfigAnalogFilter(&hi2c1, I2C_ANALOGFILTER_ENABLE) != HAL_OK)
+  {
+    Error_Handler();
+  }
+
+  /** Configure Digital filter
+  */
+  if (HAL_I2CEx_ConfigDigitalFilter(&hi2c1, 0) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  /* USER CODE BEGIN I2C1_Init 2 */
+
+  /* USER CODE END I2C1_Init 2 */
 
 }
 
@@ -371,13 +421,13 @@ static void MX_GPIO_Init(void)
   /*Configure GPIO pin Output Level */
   /* LEDs, OLED reset, and all column pins start LOW (columns inactive = LOW) */
   HAL_GPIO_WritePin(GPIOC, Mode_Pin|ScrollLock_Pin|CapsLock_Pin|NumLock_Pin
-                          |Column_10_Pin|Column_09_Pin|Column_08_Pin, GPIO_PIN_RESET);
+                          |Column_01_Pin|Column_00_Pin|Column_10_Pin|Column_09_Pin
+                          |Column_08_Pin, GPIO_PIN_RESET);
 
   HAL_GPIO_WritePin(GPIOA, Column_13_Pin|Column_11_Pin, GPIO_PIN_RESET);
 
   HAL_GPIO_WritePin(GPIOB, Column_12_Pin|OLED_RST_Pin|Cplumn_06_Pin|Column_05_Pin
-                          |Column_04_Pin|Column_03_Pin|Column_02_Pin|Column_01_Pin
-                          |Column_00_Pin, GPIO_PIN_RESET);
+                          |Column_04_Pin|Column_03_Pin|Column_02_Pin, GPIO_PIN_RESET);
 
   HAL_GPIO_WritePin(Column_07_GPIO_Port, Column_07_Pin, GPIO_PIN_RESET);
 
@@ -388,19 +438,21 @@ static void MX_GPIO_Init(void)
   HAL_GPIO_Init(Mode_Switch_GPIO_Port, &GPIO_InitStruct);
 
   /*Configure GPIO pins : Mode_Pin ScrollLock_Pin CapsLock_Pin NumLock_Pin
-                           Column_10_Pin Column_09_Pin Column_08_Pin */
+                           Column_01_Pin Column_00_Pin Column_10_Pin Column_09_Pin
+                           Column_08_Pin */
   GPIO_InitStruct.Pin = Mode_Pin|ScrollLock_Pin|CapsLock_Pin|NumLock_Pin
-                          |Column_10_Pin|Column_09_Pin|Column_08_Pin;
+                          |Column_01_Pin|Column_00_Pin|Column_10_Pin|Column_09_Pin
+                          |Column_08_Pin;
   GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
   GPIO_InitStruct.Pull = GPIO_NOPULL;
-  GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
+  GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_HIGH;
   HAL_GPIO_Init(GPIOC, &GPIO_InitStruct);
 
   /*Configure GPIO pins : Column_13_Pin Column_11_Pin */
   GPIO_InitStruct.Pin = Column_13_Pin|Column_11_Pin;
   GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
   GPIO_InitStruct.Pull = GPIO_NOPULL;
-  GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
+  GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_HIGH;
   HAL_GPIO_Init(GPIOA, &GPIO_InitStruct);
 
   /* Rows use PULL-DOWN: diode anode is at column (driven HIGH to scan),
@@ -425,21 +477,19 @@ static void MX_GPIO_Init(void)
   HAL_GPIO_Init(GPIOB, &GPIO_InitStruct);
 
   /*Configure GPIO pins : Column_12_Pin OLED_RST_Pin Cplumn_06_Pin Column_05_Pin
-                           Column_04_Pin Column_03_Pin Column_02_Pin Column_01_Pin
-                           Column_00_Pin */
+                           Column_04_Pin Column_03_Pin Column_02_Pin */
   GPIO_InitStruct.Pin = Column_12_Pin|OLED_RST_Pin|Cplumn_06_Pin|Column_05_Pin
-                          |Column_04_Pin|Column_03_Pin|Column_02_Pin|Column_01_Pin
-                          |Column_00_Pin;
+                          |Column_04_Pin|Column_03_Pin|Column_02_Pin;
   GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
   GPIO_InitStruct.Pull = GPIO_NOPULL;
-  GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
+  GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_HIGH;
   HAL_GPIO_Init(GPIOB, &GPIO_InitStruct);
 
   /*Configure GPIO pin : Column_07_Pin */
   GPIO_InitStruct.Pin = Column_07_Pin;
   GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
   GPIO_InitStruct.Pull = GPIO_NOPULL;
-  GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
+  GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_HIGH;
   HAL_GPIO_Init(Column_07_GPIO_Port, &GPIO_InitStruct);
 
   /* USER CODE BEGIN MX_GPIO_Init_2 */

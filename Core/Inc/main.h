@@ -67,6 +67,8 @@ void Error_Handler(void);
 #define CapsLock_GPIO_Port GPIOC
 #define NumLock_Pin GPIO_PIN_3
 #define NumLock_GPIO_Port GPIOC
+#define LCD_PWM_Pin GPIO_PIN_6
+#define LCD_PWM_GPIO_Port GPIOC
 #define Column_13_Pin GPIO_PIN_6
 #define Column_13_GPIO_Port GPIOA
 #define Row_00_Pin GPIO_PIN_7
@@ -107,10 +109,10 @@ void Error_Handler(void);
 #define Column_03_GPIO_Port GPIOB
 #define Column_02_Pin GPIO_PIN_7
 #define Column_02_GPIO_Port GPIOB
-#define Column_01_Pin GPIO_PIN_8
-#define Column_01_GPIO_Port GPIOB
-#define Column_00_Pin GPIO_PIN_9
-#define Column_00_GPIO_Port GPIOB
+#define Column_01_Pin GPIO_PIN_13
+#define Column_01_GPIO_Port GPIOC
+#define Column_00_Pin GPIO_PIN_14
+#define Column_00_GPIO_Port GPIOC
 
 /* USER CODE BEGIN Private defines */
 

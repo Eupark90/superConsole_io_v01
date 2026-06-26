@@ -16,15 +16,14 @@
         {
             "label": "Upload Debug",
             "type": "shell",
-            "command": "${userHome}/.local/share/stm32cube/bundles/programmer/2.22.0+st.1/bin/STM32_Programmer_CLI",
+            "command": "/opt/homebrew/bin/openocd",
             "args": [
+                "-f",
+                "interface/stlink.cfg",
+                "-f",
+                "target/stm32f0x.cfg",
                 "-c",
-                "port=SWD",
-                "mode=UR",
-                "-w",
-                "${workspaceFolder}/build/Debug/superConsoleV01_IO.elf",
-                "-v",
-                "-rst"
+                "program ${workspaceFolder}/build/Debug/superConsoleV01_IO.elf verify reset exit"
             ],
             "dependsOn": "Build Debug",
             "problemMatcher": []
