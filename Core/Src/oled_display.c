@@ -2,6 +2,7 @@
 
 #include "backlight_control.h"
 #include "battery_monitor.h"
+#include "io_control.h"
 #include <string.h>
 
 extern I2C_HandleTypeDef hi2c1;
@@ -30,6 +31,7 @@ static OLED_State_t oled_state;
 static uint8_t oled_online;
 static uint8_t oled_tx_busy;
 static uint8_t oled_dirty;
+static uint8_t oled_render_requested;
 static uint8_t oled_init_index;
 static uint8_t oled_page_index;
 static uint8_t oled_page_phase;
@@ -198,13 +200,19 @@ static void FormatPercent(char *buf, uint8_t max, uint8_t percent)
     AppendChar(buf, &idx, max, '%');
 }
 
-static void FormatBacklight(char *buf, uint8_t max, uint8_t percent)
+static void FormatControlStatus(char *buf, uint8_t max, uint8_t backlight_percent, uint8_t mouse_percent)
 {
     uint8_t idx = 0U;
     AppendChar(buf, &idx, max, 'B');
     AppendChar(buf, &idx, max, 'L');
     AppendChar(buf, &idx, max, ':');
-    AppendUnsigned(buf, &idx, max, percent);
+    AppendUnsigned(buf, &idx, max, backlight_percent);
+    AppendChar(buf, &idx, max, '%');
+    AppendChar(buf, &idx, max, ' ');
+    AppendChar(buf, &idx, max, 'M');
+    AppendChar(buf, &idx, max, 'S');
+    AppendChar(buf, &idx, max, ':');
+    AppendUnsigned(buf, &idx, max, mouse_percent);
     AppendChar(buf, &idx, max, '%');
 }
 
@@ -230,7 +238,7 @@ static void RenderFrame(void)
         DrawText(0U, 4U, "HID ACTIVE");
     }
 
-    FormatBacklight(line, sizeof(line), Backlight_GetPercent());
+    FormatControlStatus(line, sizeof(line), Backlight_GetPercent(), IO_Control_GetMouseSensitivityPercent());
     DrawText(0U, 7U, line);
 
     oled_dirty = 1U;
@@ -315,6 +323,7 @@ void OLED_Display_Init(void)
     oled_online = 0U;
     oled_tx_busy = 0U;
     oled_dirty = 0U;
+    oled_render_requested = 1U;
     oled_init_index = 0U;
     oled_page_index = 0U;
     oled_page_phase = 0U;
@@ -350,7 +359,8 @@ void OLED_Display_Process(void)
             break;
 
         case OLED_STATE_IDLE:
-            if ((now - last_render_ms) >= OLED_RENDER_INTERVAL_MS) {
+            if (oled_render_requested || (now - last_render_ms) >= OLED_RENDER_INTERVAL_MS) {
+                oled_render_requested = 0U;
                 last_render_ms = now;
                 RenderFrame();
             }
@@ -375,6 +385,11 @@ void OLED_Display_Process(void)
             OLED_MarkOffline(now);
             break;
     }
+}
+
+void OLED_Display_RequestRefresh(void)
+{
+    oled_render_requested = 1U;
 }
 
 void OLED_Display_I2C_TxCpltCallback(I2C_HandleTypeDef *hi2c)

@@ -31,5 +31,6 @@ typedef struct __attribute__((packed)) {
 
 void IO_Control_Init(void);
 void IO_Control_Process(void);
+uint8_t IO_Control_GetMouseSensitivityPercent(void);
 
 #endif /* __IO_CONTROL_H */

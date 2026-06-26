@@ -143,6 +143,20 @@ ADC: 12비트 → 8비트 변환, 샘플링 55.5 사이클, HALEx 캘리브레�
 - 마우스 모드에서 `GP Y` 버튼을 누르면 밝기가 20% 증가합니다.
 - 마우스 모드에서 `GP A` 버튼을 누르면 밝기가 20% 감소합니다.
 - 버튼을 누른 순간만 처리하므로 누르고 있는 동안 반복 증감하지 않습니다.
+- 밝기 변경 시 OLED에 갱신 요청을 보내 현재 밝기 퍼센트 표시가 다음 OLED idle 시점에 바로 갱신됩니다.
+
+### 마우스 감도
+
+| 항목 | 내용 |
+|---|---|
+| 시작 감도 | 80% |
+| 조절 범위 | 20% / 40% / 60% / 80% / 100% |
+| 감소 | 마우스 모드에서 `GP X` |
+| 증가 | 마우스 모드에서 `GP B` |
+
+- 기존 마우스 이동량을 80% 기준값으로 두고, 현재 감도 퍼센트에 맞춰 X/Y 커서 이동량만 스케일합니다.
+- 스크롤 휠 감도는 기존과 동일하게 유지합니다.
+- 감도 변경 시 OLED에 갱신 요청을 보내 현재 감도 퍼센트 표시가 다음 OLED idle 시점에 바로 갱신됩니다.
 
 ### 현재 핀 사용 요약
 
@@ -204,6 +218,8 @@ Interface 2 — Gamepad   EP3 IN  (4ms)  8 bytes  16 buttons + 6 axes (LX/LY/RX/
 | GP L3 (매트릭스) | 휠 클릭 |
 | GP Y (매트릭스) | 밝기 +20% |
 | GP A (매트릭스) | 밝기 -20% |
+| GP X (매트릭스) | 마우스 감도 -20% |
+| GP B (매트릭스) | 마우스 감도 +20% |
 
 ---
 
@@ -359,6 +375,9 @@ Terminal → Run Task → Upload Debug
 - 전력 `power_mw`
 - 전압 기반 잔량 추정 `percent`
 - 현재 밝기 `Backlight_GetPercent()`
+- 현재 마우스 감도 `IO_Control_GetMouseSensitivityPercent()`
+- 밝기 버튼 입력 시 `OLED_Display_RequestRefresh()`로 표시 갱신 요청
+- 감도 버튼 입력 시 `OLED_Display_RequestRefresh()`로 표시 갱신 요청
 
 **HID 지연 방지**
 - OLED reset은 `HAL_Delay()` 없이 tick 기반 상태 머신으로 처리

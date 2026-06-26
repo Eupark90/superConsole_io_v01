@@ -1,5 +1,6 @@
 #include "backlight_control.h"
 #include "io_control.h"
+#include "oled_display.h"
 #include "usbd_custom_hid_if.h"
 #include "usbd_customhid.h"
 #include <string.h>
@@ -15,6 +16,14 @@ static KeyboardReport_t prev_kb_report;
 static GamepadReport_t prev_gp_report;
 static uint8_t prev_mouse_buttons;
 static uint16_t prev_brightness_buttons;
+static uint16_t prev_sensitivity_buttons;
+
+#define MOUSE_SENSITIVITY_MIN_PERCENT      20U
+#define MOUSE_SENSITIVITY_MAX_PERCENT      100U
+#define MOUSE_SENSITIVITY_STEP_PERCENT     20U
+#define MOUSE_SENSITIVITY_DEFAULT_PERCENT  80U
+
+static uint8_t mouse_sensitivity_percent = MOUSE_SENSITIVITY_DEFAULT_PERCENT;
 
 /* Non-blocking send to one of the three independent HID endpoints.
    itf_idx: 0=Keyboard, 1=Mouse, 2=Gamepad */
@@ -145,6 +154,8 @@ void IO_Control_Init(void) {
     memcpy(&prev_gp_report, &gp_report, sizeof(gp_report));
     prev_mouse_buttons = 0;
     prev_brightness_buttons = 0;
+    prev_sensitivity_buttons = 0;
+    mouse_sensitivity_percent = MOUSE_SENSITIVITY_DEFAULT_PERCENT;
     memset(db_state, 0, sizeof(db_state));
     memset(db_raw,   0, sizeof(db_raw));
     memset(db_time,  0, sizeof(db_time));
@@ -161,6 +172,41 @@ void Read_ADC(void) {
         }
     }
     HAL_ADC_Stop(&hadc);
+}
+
+uint8_t IO_Control_GetMouseSensitivityPercent(void)
+{
+    return mouse_sensitivity_percent;
+}
+
+static void MouseSensitivity_Increase(void)
+{
+    if (mouse_sensitivity_percent < MOUSE_SENSITIVITY_MAX_PERCENT) {
+        mouse_sensitivity_percent = (uint8_t)(mouse_sensitivity_percent + MOUSE_SENSITIVITY_STEP_PERCENT);
+        if (mouse_sensitivity_percent > MOUSE_SENSITIVITY_MAX_PERCENT) {
+            mouse_sensitivity_percent = MOUSE_SENSITIVITY_MAX_PERCENT;
+        }
+    }
+}
+
+static void MouseSensitivity_Decrease(void)
+{
+    if (mouse_sensitivity_percent > MOUSE_SENSITIVITY_MIN_PERCENT) {
+        mouse_sensitivity_percent = (uint8_t)(mouse_sensitivity_percent - MOUSE_SENSITIVITY_STEP_PERCENT);
+        if (mouse_sensitivity_percent < MOUSE_SENSITIVITY_MIN_PERCENT) {
+            mouse_sensitivity_percent = MOUSE_SENSITIVITY_MIN_PERCENT;
+        }
+    }
+}
+
+static int8_t ApplyMouseSensitivity(int8_t value)
+{
+    int16_t scaled = ((int16_t)value * (int16_t)mouse_sensitivity_percent) /
+                     (int16_t)MOUSE_SENSITIVITY_DEFAULT_PERCENT;
+
+    if (scaled > 127) return 127;
+    if (scaled < -127) return -127;
+    return (int8_t)scaled;
 }
 
 void IO_Control_Process(void) {
@@ -268,14 +314,28 @@ void IO_Control_Process(void) {
             uint8_t mouse_buttons = 0;
             uint16_t brightness_buttons = gp_report.buttons & ((1u << GP_Y) | (1u << GP_A));
             uint16_t pressed_brightness_buttons = brightness_buttons & ~prev_brightness_buttons;
+            uint16_t sensitivity_buttons = gp_report.buttons & ((1u << GP_X) | (1u << GP_B));
+            uint16_t pressed_sensitivity_buttons = sensitivity_buttons & ~prev_sensitivity_buttons;
 
             if (pressed_brightness_buttons & (1u << GP_Y)) {
                 Backlight_Increase();
+                OLED_Display_RequestRefresh();
             }
             if (pressed_brightness_buttons & (1u << GP_A)) {
                 Backlight_Decrease();
+                OLED_Display_RequestRefresh();
             }
             prev_brightness_buttons = brightness_buttons;
+
+            if (pressed_sensitivity_buttons & (1u << GP_X)) {
+                MouseSensitivity_Decrease();
+                OLED_Display_RequestRefresh();
+            }
+            if (pressed_sensitivity_buttons & (1u << GP_B)) {
+                MouseSensitivity_Increase();
+                OLED_Display_RequestRefresh();
+            }
+            prev_sensitivity_buttons = sensitivity_buttons;
 
             /* R1 digital matrix button -> left click */
             if (gp_report.buttons & (1 << GP_R1)) {
@@ -301,8 +361,8 @@ void IO_Control_Process(void) {
             if (my    >= -25 && my    <= 25) my    = 0;
             if (wheel >= -25 && wheel <= 25) wheel = 0;
 
-            mouse_report.x     = mx    / 8;
-            mouse_report.y     = my    / 8;
+            mouse_report.x     = ApplyMouseSensitivity(mx / 8);
+            mouse_report.y     = ApplyMouseSensitivity(my / 8);
             mouse_report.wheel = wheel / 32;
 
             /* Send on movement OR button state change */

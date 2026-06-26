@@ -30,6 +30,10 @@
     * **Default:** 60%
     * **Range:** 20% to 100%, 20% step
     * **Mouse Mode:** GP Y increases brightness, GP A decreases brightness
+* **Mouse Sensitivity:**
+    * **Default:** 80%
+    * **Range:** 20%, 40%, 60%, 80%, 100%
+    * **Mouse Mode:** GP X decreases sensitivity, GP B increases sensitivity
 
 ## 2. 키보드 매트릭스 설정 (14 Columns x 7 Rows)
 스캔 방식: Column에서 출력 신호를 보내고 Row에서 입력을 읽음.
