@@ -1,8 +1,6 @@
 #include "oled_display.h"
 
-#include "backlight_control.h"
 #include "battery_monitor.h"
-#include "io_control.h"
 #include <string.h>
 
 extern I2C_HandleTypeDef hi2c1;
@@ -17,6 +15,7 @@ extern I2C_HandleTypeDef hi2c1;
 #define OLED_RETRY_INTERVAL_MS   10000U
 #define OLED_RENDER_INTERVAL_MS  500U
 #define OLED_PAGE_INTERVAL_MS    20U
+#define OLED_CONTROL_OVERLAY_MS  1600U
 
 typedef enum {
     OLED_STATE_RESET_LOW = 0,
@@ -27,11 +26,19 @@ typedef enum {
     OLED_STATE_OFFLINE,
 } OLED_State_t;
 
+typedef enum {
+    OLED_OVERLAY_NONE = 0,
+    OLED_OVERLAY_BACKLIGHT,
+    OLED_OVERLAY_MOUSE_SENSITIVITY,
+} OLED_Overlay_t;
+
 static OLED_State_t oled_state;
+static OLED_Overlay_t oled_overlay;
 static uint8_t oled_online;
 static uint8_t oled_tx_busy;
 static uint8_t oled_dirty;
 static uint8_t oled_render_requested;
+static uint8_t oled_overlay_value;
 static uint8_t oled_init_index;
 static uint8_t oled_page_index;
 static uint8_t oled_page_phase;
@@ -41,6 +48,7 @@ static uint32_t state_time_ms;
 static uint32_t next_retry_ms;
 static uint32_t last_render_ms;
 static uint32_t last_page_ms;
+static uint32_t overlay_until_ms;
 
 static const uint8_t oled_init_cmds[] = {
     0xAE,       /* display off */
@@ -105,20 +113,43 @@ static uint8_t Font5x7(char ch, uint8_t col)
     }
 }
 
-static void DrawChar(uint8_t x, uint8_t page, char ch)
+static void DrawPixel(uint8_t x, uint8_t y)
 {
-    if (page >= OLED_PAGES || x >= OLED_WIDTH) return;
-    for (uint8_t i = 0U; i < 6U && (x + i) < OLED_WIDTH; i++) {
-        framebuffer[(page * OLED_WIDTH) + x + i] = (i < 5U) ? Font5x7(ch, i) : 0x00U;
+    if (x >= OLED_WIDTH || y >= OLED_HEIGHT) return;
+    framebuffer[((uint16_t)(y / 8U) * OLED_WIDTH) + x] |= (uint8_t)(1U << (y & 7U));
+}
+
+static void DrawChar2x(uint8_t x, uint8_t y, char ch)
+{
+    for (uint8_t col = 0U; col < 5U; col++) {
+        uint8_t bits = Font5x7(ch, col);
+        for (uint8_t row = 0U; row < 7U; row++) {
+            if (bits & (1U << row)) {
+                uint8_t px = (uint8_t)(x + (col * 2U));
+                uint8_t py = (uint8_t)(y + (row * 2U));
+                DrawPixel(px, py);
+                DrawPixel((uint8_t)(px + 1U), py);
+                DrawPixel(px, (uint8_t)(py + 1U));
+                DrawPixel((uint8_t)(px + 1U), (uint8_t)(py + 1U));
+            }
+        }
     }
 }
 
-static void DrawText(uint8_t x, uint8_t page, const char *text)
+static void DrawText2x(uint8_t x, uint8_t y, const char *text)
 {
     while (*text && x < OLED_WIDTH) {
-        DrawChar(x, page, *text++);
-        x = (uint8_t)(x + 6U);
+        DrawChar2x(x, y, *text++);
+        x = (uint8_t)(x + 12U);
     }
+}
+
+static void DrawCenteredText2x(uint8_t y, const char *text)
+{
+    uint8_t len = (uint8_t)strlen(text);
+    uint8_t width = (uint8_t)(len * 12U);
+    uint8_t x = (width >= OLED_WIDTH) ? 0U : (uint8_t)((OLED_WIDTH - width) / 2U);
+    DrawText2x(x, y, text);
 }
 
 static void AppendChar(char *buf, uint8_t *idx, uint8_t max, char ch)
@@ -200,48 +231,62 @@ static void FormatPercent(char *buf, uint8_t max, uint8_t percent)
     AppendChar(buf, &idx, max, '%');
 }
 
-static void FormatControlStatus(char *buf, uint8_t max, uint8_t backlight_percent, uint8_t mouse_percent)
+static void FormatOverlayPercent(char *buf, uint8_t max, uint8_t percent)
 {
     uint8_t idx = 0U;
-    AppendChar(buf, &idx, max, 'B');
-    AppendChar(buf, &idx, max, 'L');
-    AppendChar(buf, &idx, max, ':');
-    AppendUnsigned(buf, &idx, max, backlight_percent);
-    AppendChar(buf, &idx, max, '%');
-    AppendChar(buf, &idx, max, ' ');
-    AppendChar(buf, &idx, max, 'M');
-    AppendChar(buf, &idx, max, 'S');
-    AppendChar(buf, &idx, max, ':');
-    AppendUnsigned(buf, &idx, max, mouse_percent);
+    AppendUnsigned(buf, &idx, max, percent);
     AppendChar(buf, &idx, max, '%');
 }
 
-static void RenderFrame(void)
+static void RenderOverlayFrame(void)
+{
+    char line[8];
+
+    memset(framebuffer, 0, sizeof(framebuffer));
+    DrawCenteredText2x(4U, (oled_overlay == OLED_OVERLAY_BACKLIGHT) ? "LIGHT" : "SENS");
+    FormatOverlayPercent(line, sizeof(line), oled_overlay_value);
+    DrawCenteredText2x(34U, line);
+    oled_dirty = 1U;
+}
+
+static void RenderStatusFrame(void)
 {
     const BatteryStatus_t *bat = BatteryMonitor_GetStatus();
     char line[22];
 
     memset(framebuffer, 0, sizeof(framebuffer));
-    DrawText(0U, 0U, "SUPERCON IO");
 
     if (bat->ina219_online) {
         FormatVoltage(line, sizeof(line), bat->battery_voltage_mv);
-        DrawText(0U, 2U, line);
+        DrawText2x(0U, 0U, line);
         FormatCurrent(line, sizeof(line), bat->current_ma);
-        DrawText(0U, 3U, line);
+        DrawText2x(0U, 16U, line);
         FormatPower(line, sizeof(line), bat->power_mw);
-        DrawText(0U, 4U, line);
+        DrawText2x(0U, 32U, line);
         FormatPercent(line, sizeof(line), bat->percent);
-        DrawText(0U, 5U, line);
+        DrawText2x(0U, 48U, line);
     } else {
-        DrawText(0U, 2U, "INA219 OFFLINE");
-        DrawText(0U, 4U, "HID ACTIVE");
+        DrawCenteredText2x(6U, "INA219");
+        DrawCenteredText2x(26U, "OFFLINE");
+        DrawCenteredText2x(46U, "HID OK");
     }
 
-    FormatControlStatus(line, sizeof(line), Backlight_GetPercent(), IO_Control_GetMouseSensitivityPercent());
-    DrawText(0U, 7U, line);
-
     oled_dirty = 1U;
+}
+
+static void RenderFrame(void)
+{
+    uint32_t now = HAL_GetTick();
+
+    if (oled_overlay != OLED_OVERLAY_NONE) {
+        if ((int32_t)(now - overlay_until_ms) < 0) {
+            RenderOverlayFrame();
+            return;
+        }
+        oled_overlay = OLED_OVERLAY_NONE;
+    }
+
+    RenderStatusFrame();
 }
 
 static void OLED_MarkOffline(uint32_t now)
@@ -320,6 +365,7 @@ static void OLED_SendPage(uint32_t now)
 void OLED_Display_Init(void)
 {
     oled_state = OLED_STATE_RESET_LOW;
+    oled_overlay = OLED_OVERLAY_NONE;
     oled_online = 0U;
     oled_tx_busy = 0U;
     oled_dirty = 0U;
@@ -331,6 +377,7 @@ void OLED_Display_Init(void)
     next_retry_ms = 0U;
     last_render_ms = 0U;
     last_page_ms = 0U;
+    overlay_until_ms = 0U;
     HAL_GPIO_WritePin(OLED_RST_GPIO_Port, OLED_RST_Pin, GPIO_PIN_RESET);
 }
 
@@ -359,6 +406,10 @@ void OLED_Display_Process(void)
             break;
 
         case OLED_STATE_IDLE:
+            if (oled_overlay != OLED_OVERLAY_NONE && (int32_t)(now - overlay_until_ms) >= 0) {
+                oled_overlay = OLED_OVERLAY_NONE;
+                oled_render_requested = 1U;
+            }
             if (oled_render_requested || (now - last_render_ms) >= OLED_RENDER_INTERVAL_MS) {
                 oled_render_requested = 0U;
                 last_render_ms = now;
@@ -389,6 +440,22 @@ void OLED_Display_Process(void)
 
 void OLED_Display_RequestRefresh(void)
 {
+    oled_render_requested = 1U;
+}
+
+void OLED_Display_ShowBacklightPercent(uint8_t percent)
+{
+    oled_overlay = OLED_OVERLAY_BACKLIGHT;
+    oled_overlay_value = percent;
+    overlay_until_ms = HAL_GetTick() + OLED_CONTROL_OVERLAY_MS;
+    oled_render_requested = 1U;
+}
+
+void OLED_Display_ShowMouseSensitivityPercent(uint8_t percent)
+{
+    oled_overlay = OLED_OVERLAY_MOUSE_SENSITIVITY;
+    oled_overlay_value = percent;
+    overlay_until_ms = HAL_GetTick() + OLED_CONTROL_OVERLAY_MS;
     oled_render_requested = 1U;
 }
 

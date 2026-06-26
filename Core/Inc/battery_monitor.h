@@ -8,6 +8,12 @@ typedef struct {
     uint8_t i2c_online;
     uint8_t ina219_online;
     uint8_t mp2672_online;
+    uint8_t mp2672_registers_valid;
+    uint8_t mp2672_reg00;
+    uint8_t mp2672_reg01;
+    uint8_t mp2672_reg02;
+    uint8_t mp2672_reg03;
+    uint8_t mp2672_reg04;
     uint8_t percent;          /* voltage-based estimate, 0xFF when unavailable */
     uint16_t battery_voltage_mv;
     uint16_t bus_voltage_mv;
@@ -16,6 +22,7 @@ typedef struct {
     int16_t current_ma;
     uint16_t power_mw;
     uint32_t last_update_ms;
+    uint32_t mp2672_last_update_ms;
     uint32_t read_error_count;
     uint32_t ina219_error_count;
     uint32_t mp2672_error_count;

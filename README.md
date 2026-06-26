@@ -108,8 +108,22 @@ ADC: 12비트 → 8비트 변환, 샘플링 55.5 사이클, HALEx 캘리브레�
 - 읽는 값: bus voltage, shunt voltage, current, power.
 - 잔여량 `percent`는 INA219 배터리 전압 기반의 대략 추정값입니다. 정확한 SOC가 필요하면 fuel gauge IC가 필요합니다.
 - INA219가 장착되지 않은 테스트 보드에서는 `ina219_online=0`으로 두고 10초마다만 재탐색합니다. 이 경우 HID 입력 처리는 계속 동작하며, 전압/전류 값은 `0`, 잔량은 `unknown(0xFF)`입니다.
-- 같은 I2C2 버스의 MP2672AGD는 주소 `0x4B`에 대해 연결 여부만 확인합니다. 충전 상태/전압 측정은 하지 않습니다.
+- 같은 I2C2 버스의 MP2672AGD는 주소 `0x4B`에 대해 연결 여부를 확인하고, 응답 시 `REG00H`~`REG04H` raw 값을 주기적으로 읽어 `BatteryStatus_t`에 저장합니다.
+- 현재 OLED의 `V/I/P/B` 표시는 INA219 기반이며, MP2672AGD 값은 충전 상태/fault 표시 확장을 위한 준비 단계입니다.
 - 부팅 후 메인 루프 첫 회전에서 INA219/MP2672AGD presence를 확인하고, 이후 미응답 소자는 10초마다 재탐색합니다.
+
+#### MP2672AGD 읽기 준비 레지스터
+
+| 레지스터 | 현재 처리 | 향후 활용 |
+|---|---|---|
+| `REG00H` | `mp2672_reg00` raw 저장 | 충전 enable, 배터리 regulation/pre-charge 설정 확인 |
+| `REG01H` | `mp2672_reg01` raw 저장 | cell balance, fast charge current 설정 확인 |
+| `REG02H` | `mp2672_reg02` raw 저장 | watchdog, charge timer, switching 설정 확인 |
+| `REG03H` | `mp2672_reg03` raw 저장 | 충전 상태, power path/thermal/system 상태 표시 |
+| `REG04H` | `mp2672_reg04` raw 저장 | watchdog/input/thermal/timer/battery/NTC fault 표시 |
+
+- `mp2672_registers_valid=1`이면 `REG00H`~`REG04H` 값이 최신 읽기 성공값입니다.
+- MP2672AGD 읽기 실패 시 `mp2672_online=0`, `mp2672_registers_valid=0`으로 두고 10초 뒤 재시도합니다.
 
 ### OLED 표시 장치 (Wisevision X096-2864KSWPG01-H30)
 
@@ -121,7 +135,8 @@ ADC: 12비트 → 8비트 변환, 샘플링 55.5 사이클, HALEx 캘리브레�
 | 컨트롤러 | SSD1315 |
 | I2C 주소 | `0x3C` |
 
-- INA219에서 읽은 배터리 전압, 전류, 전력, 전압 기반 잔량 추정치와 현재 밝기 퍼센트를 표시합니다.
+- 평상시에는 INA219에서 읽은 배터리 전압, 전류, 전력, 전압 기반 잔량 추정치를 2배 크기 글꼴로 표시합니다.
+- 밝기 또는 마우스 감도가 변경되면 평상시 화면을 잠시 숨기고, 변경된 값을 큰 글씨의 전용 화면으로 약 1.6초 동안 표시합니다.
 - OLED 초기화와 화면 전송은 `HAL_I2C_Master_Transmit_IT()` 기반 interrupt 전송만 사용합니다.
 - 메인 루프에서는 HID 처리 이후 `OLED_Display_Process()`가 짧게 상태만 진행합니다.
 - 화면은 500ms마다 렌더링하고, 실제 I2C 전송은 128바이트 page 단위로 20ms 이상 간격을 두고 나누어 보냅니다.
@@ -143,7 +158,7 @@ ADC: 12비트 → 8비트 변환, 샘플링 55.5 사이클, HALEx 캘리브레�
 - 마우스 모드에서 `GP Y` 버튼을 누르면 밝기가 20% 증가합니다.
 - 마우스 모드에서 `GP A` 버튼을 누르면 밝기가 20% 감소합니다.
 - 버튼을 누른 순간만 처리하므로 누르고 있는 동안 반복 증감하지 않습니다.
-- 밝기 변경 시 OLED에 갱신 요청을 보내 현재 밝기 퍼센트 표시가 다음 OLED idle 시점에 바로 갱신됩니다.
+- 밝기 변경 시 OLED가 `LIGHT 60%` 형식의 전용 큰 글씨 화면으로 약 1.6초 전환됩니다.
 
 ### 마우스 감도
 
@@ -156,7 +171,7 @@ ADC: 12비트 → 8비트 변환, 샘플링 55.5 사이클, HALEx 캘리브레�
 
 - 기존 마우스 이동량을 80% 기준값으로 두고, 현재 감도 퍼센트에 맞춰 X/Y 커서 이동량만 스케일합니다.
 - 스크롤 휠 감도는 기존과 동일하게 유지합니다.
-- 감도 변경 시 OLED에 갱신 요청을 보내 현재 감도 퍼센트 표시가 다음 OLED idle 시점에 바로 갱신됩니다.
+- 감도 변경 시 OLED가 `SENS 80%` 형식의 전용 큰 글씨 화면으로 약 1.6초 전환됩니다.
 
 ### 현재 핀 사용 요약
 
@@ -231,7 +246,7 @@ IO_Control_Process() — 메인 루프에서 블로킹 없이 반복
  │    └─ 비대칭 디바운스: Press 2ms / Release 6ms
  ├─ [키보드 리포트] 변화 감지 시 EP1 IN 즉시 전송
  ├─ [ADC, 8ms 주기] Read_ADC() 4채널 → Gamepad 또는 Mouse 리포트 전송
- ├─ [배터리, 1000ms 주기] INA219 전압/전류 폴링 → BatteryStatus_t 갱신
+ ├─ [배터리, 1000ms 주기] INA219 전압/전류 + MP2672AGD REG00H~04H 폴링
  └─ [OLED, 비차단] BatteryStatus_t를 page 단위 interrupt I2C 전송으로 표시
 ```
 
@@ -343,15 +358,17 @@ Terminal → Run Task → Upload Debug
 **구성**
 - `I2C2`의 `PB13/PB14`에 연결된 INA219 `0x40`을 1초마다 폴링
 - 같은 I2C2 버스의 MP2672AGD `0x4B`는 presence만 확인
+- MP2672AGD 응답 시 `REG00H`~`REG04H` raw 값을 `BatteryStatus_t`에 저장
 - INA219는 0.1Ω 션트, calibration `4096`, current LSB `100uA`, power LSB `2mW` 기준
 - 기본 배선은 `IN+=배터리 +`, `IN-=MP2672 BATT`; 양수 전류는 방전, 음수 전류는 충전
 
 **상태 저장**
 - `BatteryMonitor_Process()`가 메인 루프에서 주기적으로 상태를 갱신
 - `BatteryMonitor_GetStatus()`로 최신 `BatteryStatus_t` 조회 가능
+- `mp2672_registers_valid`, `mp2672_reg00`~`mp2672_reg04`로 MP2672AGD 최신 raw register 값 조회 가능
 - INA219 read 실패는 `ina219_online`, `ina219_error_count`, `read_error_count`에 반영
 - INA219 미장착 보드에서도 HID 입력 지연이 생기지 않도록 재탐색은 10초 간격으로 제한
-- MP2672AGD 미응답도 동일하게 10초 간격으로만 재확인
+- MP2672AGD 미응답 또는 register read 실패도 동일하게 10초 간격으로만 재확인
 
 **잔여량 제한**
 - INA219 배터리 전압 기반 lookup table로 `percent`를 대략 추정
@@ -374,10 +391,10 @@ Terminal → Run Task → Upload Debug
 - 배터리 전류 `current_ma`
 - 전력 `power_mw`
 - 전압 기반 잔량 추정 `percent`
-- 현재 밝기 `Backlight_GetPercent()`
-- 현재 마우스 감도 `IO_Control_GetMouseSensitivityPercent()`
-- 밝기 버튼 입력 시 `OLED_Display_RequestRefresh()`로 표시 갱신 요청
-- 감도 버튼 입력 시 `OLED_Display_RequestRefresh()`로 표시 갱신 요청
+- 평상시 화면에서는 위 배터리 정보를 2배 크기 글꼴로 표시
+- 밝기 변경 시 `OLED_Display_ShowBacklightPercent()`로 `LIGHT xx%` 전용 화면 표시
+- 감도 변경 시 `OLED_Display_ShowMouseSensitivityPercent()`로 `SENS xx%` 전용 화면 표시
+- 밝기/감도 전용 화면은 약 1.6초 뒤 평상시 배터리 화면으로 복귀
 
 **HID 지연 방지**
 - OLED reset은 `HAL_Delay()` 없이 tick 기반 상태 머신으로 처리

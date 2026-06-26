@@ -14,6 +14,11 @@ extern I2C_HandleTypeDef hi2c2;
 #define INA219_REG_CALIBRATION      0x05U
 #define MP2672_I2C_ADDR_7BIT        0x4BU
 #define MP2672_I2C_ADDR_HAL         (MP2672_I2C_ADDR_7BIT << 1)
+#define MP2672_REG00_CHG_CTRL       0x00U
+#define MP2672_REG01_CELL_BAL_ICHG  0x01U
+#define MP2672_REG02_TIMER_CTRL     0x02U
+#define MP2672_REG03_STATUS         0x03U
+#define MP2672_REG04_FAULT          0x04U
 
 /* 32V bus range, +/-320mV shunt range, 12-bit bus/shunt ADC, continuous mode. */
 #define INA219_CONFIG_VALUE         0x399FU
@@ -71,6 +76,17 @@ static HAL_StatusTypeDef I2C_ReadReg16(uint16_t dev_addr, uint8_t reg, uint16_t 
     return status;
 }
 
+static HAL_StatusTypeDef I2C_ReadReg8(uint16_t dev_addr, uint8_t reg, uint8_t *value)
+{
+    return HAL_I2C_Mem_Read(&hi2c2,
+                            dev_addr,
+                            reg,
+                            I2C_MEMADD_SIZE_8BIT,
+                            value,
+                            1U,
+                            BATTERY_I2C_TIMEOUT_MS);
+}
+
 static HAL_StatusTypeDef INA219_Init(void)
 {
     if (I2C_WriteReg16(INA219_I2C_ADDR_HAL,
@@ -96,6 +112,49 @@ static uint8_t CheckMP2672(uint32_t now)
     battery_status.mp2672_error_count++;
     next_mp2672_retry_ms = now + MP2672_RETRY_INTERVAL_MS;
     return 0U;
+}
+
+static void ClearMP2672Registers(void)
+{
+    battery_status.mp2672_registers_valid = 0U;
+    battery_status.mp2672_reg00 = 0U;
+    battery_status.mp2672_reg01 = 0U;
+    battery_status.mp2672_reg02 = 0U;
+    battery_status.mp2672_reg03 = 0U;
+    battery_status.mp2672_reg04 = 0U;
+}
+
+static uint8_t ReadMP2672(uint32_t now)
+{
+    uint8_t reg00 = 0U;
+    uint8_t reg01 = 0U;
+    uint8_t reg02 = 0U;
+    uint8_t reg03 = 0U;
+    uint8_t reg04 = 0U;
+
+    if (I2C_ReadReg8(MP2672_I2C_ADDR_HAL, MP2672_REG00_CHG_CTRL, &reg00) != HAL_OK ||
+        I2C_ReadReg8(MP2672_I2C_ADDR_HAL, MP2672_REG01_CELL_BAL_ICHG, &reg01) != HAL_OK ||
+        I2C_ReadReg8(MP2672_I2C_ADDR_HAL, MP2672_REG02_TIMER_CTRL, &reg02) != HAL_OK ||
+        I2C_ReadReg8(MP2672_I2C_ADDR_HAL, MP2672_REG03_STATUS, &reg03) != HAL_OK ||
+        I2C_ReadReg8(MP2672_I2C_ADDR_HAL, MP2672_REG04_FAULT, &reg04) != HAL_OK) {
+        battery_status.mp2672_online = 0U;
+        battery_status.mp2672_error_count++;
+        battery_status.read_error_count++;
+        ClearMP2672Registers();
+        next_mp2672_retry_ms = now + MP2672_RETRY_INTERVAL_MS;
+        return 0U;
+    }
+
+    battery_status.mp2672_online = 1U;
+    battery_status.i2c_online = 1U;
+    battery_status.mp2672_registers_valid = 1U;
+    battery_status.mp2672_reg00 = reg00;
+    battery_status.mp2672_reg01 = reg01;
+    battery_status.mp2672_reg02 = reg02;
+    battery_status.mp2672_reg03 = reg03;
+    battery_status.mp2672_reg04 = reg04;
+    battery_status.mp2672_last_update_ms = now;
+    return 1U;
 }
 
 static uint8_t EstimatePercentFromVoltage(uint16_t voltage_mv)
@@ -216,6 +275,9 @@ void BatteryMonitor_Process(void)
 
     if (!battery_status.mp2672_online && ((int32_t)(now - next_mp2672_retry_ms) >= 0)) {
         CheckMP2672(now);
+    }
+    if (battery_status.mp2672_online) {
+        ReadMP2672(now);
     }
 
     if (battery_status.ina219_online || ((int32_t)(now - next_ina219_retry_ms) >= 0)) {

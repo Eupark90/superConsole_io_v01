@@ -319,21 +319,21 @@ void IO_Control_Process(void) {
 
             if (pressed_brightness_buttons & (1u << GP_Y)) {
                 Backlight_Increase();
-                OLED_Display_RequestRefresh();
+                OLED_Display_ShowBacklightPercent(Backlight_GetPercent());
             }
             if (pressed_brightness_buttons & (1u << GP_A)) {
                 Backlight_Decrease();
-                OLED_Display_RequestRefresh();
+                OLED_Display_ShowBacklightPercent(Backlight_GetPercent());
             }
             prev_brightness_buttons = brightness_buttons;
 
             if (pressed_sensitivity_buttons & (1u << GP_X)) {
                 MouseSensitivity_Decrease();
-                OLED_Display_RequestRefresh();
+                OLED_Display_ShowMouseSensitivityPercent(mouse_sensitivity_percent);
             }
             if (pressed_sensitivity_buttons & (1u << GP_B)) {
                 MouseSensitivity_Increase();
-                OLED_Display_RequestRefresh();
+                OLED_Display_ShowMouseSensitivityPercent(mouse_sensitivity_percent);
             }
             prev_sensitivity_buttons = sensitivity_buttons;
 

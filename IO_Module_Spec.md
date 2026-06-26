@@ -24,16 +24,19 @@
     * **SDA:** PB14 (I2C2)
     * **SCL:** PB13 (I2C2)
     * **I2C Address:** 0x4B
-    * **Use:** presence check only
+    * **Use:** presence check and raw REG00H-REG04H polling
+    * **Stored Fields:** `mp2672_registers_valid`, `mp2672_reg00` to `mp2672_reg04`
 * **LCD/OLED Brightness PWM:**
     * **PWM:** PC6 (TIM3 CH1, GPIO_AF0_TIM3)
     * **Default:** 60%
     * **Range:** 20% to 100%, 20% step
     * **Mouse Mode:** GP Y increases brightness, GP A decreases brightness
+    * **Display:** shows a large `LIGHT xx%` overlay only when changed
 * **Mouse Sensitivity:**
     * **Default:** 80%
     * **Range:** 20%, 40%, 60%, 80%, 100%
     * **Mouse Mode:** GP X decreases sensitivity, GP B increases sensitivity
+    * **Display:** shows a large `SENS xx%` overlay only when changed
 
 ## 2. 키보드 매트릭스 설정 (14 Columns x 7 Rows)
 스캔 방식: Column에서 출력 신호를 보내고 Row에서 입력을 읽음.
