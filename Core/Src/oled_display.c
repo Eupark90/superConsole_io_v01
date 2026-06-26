@@ -1,5 +1,6 @@
 #include "oled_display.h"
 
+#include "backlight_control.h"
 #include "battery_monitor.h"
 #include <string.h>
 
@@ -197,6 +198,16 @@ static void FormatPercent(char *buf, uint8_t max, uint8_t percent)
     AppendChar(buf, &idx, max, '%');
 }
 
+static void FormatBacklight(char *buf, uint8_t max, uint8_t percent)
+{
+    uint8_t idx = 0U;
+    AppendChar(buf, &idx, max, 'B');
+    AppendChar(buf, &idx, max, 'L');
+    AppendChar(buf, &idx, max, ':');
+    AppendUnsigned(buf, &idx, max, percent);
+    AppendChar(buf, &idx, max, '%');
+}
+
 static void RenderFrame(void)
 {
     const BatteryStatus_t *bat = BatteryMonitor_GetStatus();
@@ -218,6 +229,9 @@ static void RenderFrame(void)
         DrawText(0U, 2U, "INA219 OFFLINE");
         DrawText(0U, 4U, "HID ACTIVE");
     }
+
+    FormatBacklight(line, sizeof(line), Backlight_GetPercent());
+    DrawText(0U, 7U, line);
 
     oled_dirty = 1U;
 }

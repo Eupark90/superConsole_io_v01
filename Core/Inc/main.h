@@ -99,8 +99,8 @@ void Error_Handler(void);
 #define Column_08_GPIO_Port GPIOC
 #define Column_07_Pin GPIO_PIN_2
 #define Column_07_GPIO_Port GPIOD
-#define Cplumn_06_Pin GPIO_PIN_3
-#define Cplumn_06_GPIO_Port GPIOB
+#define Column_06_Pin GPIO_PIN_3
+#define Column_06_GPIO_Port GPIOB
 #define Column_05_Pin GPIO_PIN_4
 #define Column_05_GPIO_Port GPIOB
 #define Column_04_Pin GPIO_PIN_5

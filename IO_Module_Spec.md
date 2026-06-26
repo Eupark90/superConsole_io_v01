@@ -26,7 +26,7 @@
     * **I2C Address:** 0x4B
     * **Use:** presence check only
 * **LCD/OLED Brightness PWM:**
-    * **PWM:** PC6 (TIM3 CH1)
+    * **PWM:** PC6 (TIM3 CH1, GPIO_AF0_TIM3)
     * **Default:** 60%
     * **Range:** 20% to 100%, 20% step
     * **Mouse Mode:** GP Y increases brightness, GP A decreases brightness

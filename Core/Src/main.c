@@ -426,7 +426,7 @@ static void MX_GPIO_Init(void)
 
   HAL_GPIO_WritePin(GPIOA, Column_13_Pin|Column_11_Pin, GPIO_PIN_RESET);
 
-  HAL_GPIO_WritePin(GPIOB, Column_12_Pin|OLED_RST_Pin|Cplumn_06_Pin|Column_05_Pin
+  HAL_GPIO_WritePin(GPIOB, Column_12_Pin|OLED_RST_Pin|Column_06_Pin|Column_05_Pin
                           |Column_04_Pin|Column_03_Pin|Column_02_Pin, GPIO_PIN_RESET);
 
   HAL_GPIO_WritePin(Column_07_GPIO_Port, Column_07_Pin, GPIO_PIN_RESET);
@@ -476,9 +476,9 @@ static void MX_GPIO_Init(void)
   GPIO_InitStruct.Pull = GPIO_PULLDOWN;
   HAL_GPIO_Init(GPIOB, &GPIO_InitStruct);
 
-  /*Configure GPIO pins : Column_12_Pin OLED_RST_Pin Cplumn_06_Pin Column_05_Pin
+  /*Configure GPIO pins : Column_12_Pin OLED_RST_Pin Column_06_Pin Column_05_Pin
                            Column_04_Pin Column_03_Pin Column_02_Pin */
-  GPIO_InitStruct.Pin = Column_12_Pin|OLED_RST_Pin|Cplumn_06_Pin|Column_05_Pin
+  GPIO_InitStruct.Pin = Column_12_Pin|OLED_RST_Pin|Column_06_Pin|Column_05_Pin
                           |Column_04_Pin|Column_03_Pin|Column_02_Pin;
   GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
   GPIO_InitStruct.Pull = GPIO_NOPULL;

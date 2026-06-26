@@ -121,7 +121,7 @@ ADC: 12비트 → 8비트 변환, 샘플링 55.5 사이클, HALEx 캘리브레�
 | 컨트롤러 | SSD1315 |
 | I2C 주소 | `0x3C` |
 
-- INA219에서 읽은 배터리 전압, 전류, 전력, 전압 기반 잔량 추정치를 표시합니다.
+- INA219에서 읽은 배터리 전압, 전류, 전력, 전압 기반 잔량 추정치와 현재 밝기 퍼센트를 표시합니다.
 - OLED 초기화와 화면 전송은 `HAL_I2C_Master_Transmit_IT()` 기반 interrupt 전송만 사용합니다.
 - 메인 루프에서는 HID 처리 이후 `OLED_Display_Process()`가 짧게 상태만 진행합니다.
 - 화면은 500ms마다 렌더링하고, 실제 I2C 전송은 128바이트 page 단위로 20ms 이상 간격을 두고 나누어 보냅니다.
@@ -133,12 +133,13 @@ ADC: 12비트 → 8비트 변환, 샘플링 55.5 사이클, HALEx 캘리브레�
 | 항목 | 내용 |
 |---|---|
 | 핀 | `PC6` |
-| 타이머 | `TIM3 CH1` |
+| 타이머 | `TIM3 CH1` (`GPIO_AF0_TIM3`) |
 | PWM 주파수 | 1kHz |
 | 시작 밝기 | 60% |
 | 조절 범위 | 20%–100%, 20% 단위 |
 
 - `TIM3`를 직접 레지스터 설정으로 구동합니다.
+- STM32F0의 `PC6 -> TIM3_CH1` alternate function은 `GPIO_AF0_TIM3`입니다.
 - 마우스 모드에서 `GP Y` 버튼을 누르면 밝기가 20% 증가합니다.
 - 마우스 모드에서 `GP A` 버튼을 누르면 밝기가 20% 감소합니다.
 - 버튼을 누른 순간만 처리하므로 누르고 있는 동안 반복 증감하지 않습니다.
@@ -157,6 +158,15 @@ ADC: 12비트 → 8비트 변환, 샘플링 55.5 사이클, HALEx 캘리브레�
 | OLED reset | PB12 |
 | INA219 / MP2672 presence I2C2 | PB13 SCL / PB14 SDA |
 | Brightness PWM | PC6 / TIM3 CH1 |
+
+### 핀아웃 점검 결과
+
+- 현재 코드와 `.ioc` 기준으로 기능 간 중복 할당된 핀은 없습니다.
+- `PC6` 백라이트 PWM은 STM32F0 기준 `TIM3_CH1 / GPIO_AF0_TIM3`로 설정합니다.
+- `PB3`는 `Column_06` GPIO 출력입니다. 이전 라벨 오타 `Cplumn_06`은 수정했습니다.
+- `PA0/PA5`는 기존 Hall 트리거 입력 자리였지만 현재는 사용하지 않으며 `GPIO_Analog`로 남겨 둡니다.
+- `PA13/PA14`는 SWD 디버그용으로 유지합니다.
+- `PC13/PC14` Column은 GPIO settle 특성을 고려해 스캔 시 약 2us settle delay를 둡니다.
 
 ---
 
@@ -348,6 +358,7 @@ Terminal → Run Task → Upload Debug
 - 배터리 전류 `current_ma`
 - 전력 `power_mw`
 - 전압 기반 잔량 추정 `percent`
+- 현재 밝기 `Backlight_GetPercent()`
 
 **HID 지연 방지**
 - OLED reset은 `HAL_Delay()` 없이 tick 기반 상태 머신으로 처리
@@ -362,6 +373,7 @@ Terminal → Run Task → Upload Debug
 
 **구성**
 - `PC6`을 `TIM3 CH1` PWM 출력으로 사용
+- STM32F0의 `PC6 -> TIM3_CH1` alternate function은 `GPIO_AF0_TIM3`
 - PWM 주파수는 1kHz
 - 기본 시작 밝기는 60%
 - 최소 20%, 최대 100%, 20% 단위 조절
@@ -370,6 +382,16 @@ Terminal → Run Task → Upload Debug
 - `GP Y`: 밝기 20% 증가
 - `GP A`: 밝기 20% 감소
 - rising edge만 처리하여 버튼을 길게 눌러도 한 단계만 변경
+
+---
+
+### [fix] 핀아웃 설정 점검 및 정리 (`main.*`, `backlight_control.c`, `superConsoleV01_IO.ioc`)
+
+- `PC6` 백라이트 PWM의 alternate function을 `GPIO_AF1_TIM3`에서 `GPIO_AF0_TIM3`로 수정
+- `TIM3` 레지스터 초기화 순서를 명확히 정리
+- `.ioc`에 `PC6=S_TIM3_CH1`, `TIM3 CH1 PWM` 설정 반영
+- `PB3` 라벨 오타 `Cplumn_06`을 `Column_06`으로 수정
+- 전체 핀아웃 점검 결과 기능 간 직접 충돌 없음 확인
 
 ---
 

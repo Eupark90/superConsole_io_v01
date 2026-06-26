@@ -24,16 +24,21 @@ void Backlight_Init(void)
     GPIO_InitStruct.Mode = GPIO_MODE_AF_PP;
     GPIO_InitStruct.Pull = GPIO_NOPULL;
     GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_HIGH;
-    GPIO_InitStruct.Alternate = GPIO_AF1_TIM3;
+    GPIO_InitStruct.Alternate = GPIO_AF0_TIM3;
     HAL_GPIO_Init(LCD_PWM_GPIO_Port, &GPIO_InitStruct);
 
+    TIM3->CR1 = 0U;
+    TIM3->CR2 = 0U;
+    TIM3->SMCR = 0U;
+    TIM3->DIER = 0U;
+    TIM3->CCER = 0U;
     TIM3->PSC = 47U;                 /* 48MHz / 48 = 1MHz timer clock */
     TIM3->ARR = BACKLIGHT_PWM_PERIOD; /* 1kHz PWM */
-    TIM3->CCMR1 &= ~(TIM_CCMR1_OC1M | TIM_CCMR1_CC1S);
-    TIM3->CCMR1 |= (6U << TIM_CCMR1_OC1M_Pos) | TIM_CCMR1_OC1PE;
-    TIM3->CCER |= TIM_CCER_CC1E;
-    TIM3->CR1 |= TIM_CR1_ARPE;
+    TIM3->CCMR1 = (6U << TIM_CCMR1_OC1M_Pos) | TIM_CCMR1_OC1PE;
+    TIM3->CCMR2 = 0U;
     Backlight_Apply();
+    TIM3->CCER = TIM_CCER_CC1E;
+    TIM3->CR1 = TIM_CR1_ARPE;
     TIM3->EGR = TIM_EGR_UG;
     TIM3->CR1 |= TIM_CR1_CEN;
 }
