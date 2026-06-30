@@ -164,14 +164,14 @@ ADC: 12비트 → 8비트 변환, 샘플링 55.5 사이클, HALEx 캘리브레�
 
 | 항목 | 내용 |
 |---|---|
-| 시작 감도 | 80% |
+| 시작 감도 | 60% |
 | 조절 범위 | 20% / 40% / 60% / 80% / 100% |
 | 감소 | 마우스 모드에서 `GP X` |
 | 증가 | 마우스 모드에서 `GP B` |
 
-- 기존 마우스 이동량을 80% 기준값으로 두고, 현재 감도 퍼센트에 맞춰 X/Y 커서 이동량만 스케일합니다.
+- 기본 60% 감도를 기준값으로 두고, 현재 감도 퍼센트에 맞춰 X/Y 커서 이동량만 스케일합니다.
 - 스크롤 휠 감도는 기존과 동일하게 유지합니다.
-- 감도 변경 시 OLED가 `SENS 80%` 형식의 전용 큰 글씨 화면으로 약 1.6초 전환됩니다.
+- 감도 변경 시 OLED가 `SENS 60%` 형식의 전용 큰 글씨 화면으로 약 1.6초 전환됩니다.
 
 ### 현재 핀 사용 요약
 
@@ -187,6 +187,7 @@ ADC: 12비트 → 8비트 변환, 샘플링 55.5 사이클, HALEx 캘리브레�
 | OLED reset | PB12 |
 | INA219 / MP2672 presence I2C2 | PB13 SCL / PB14 SDA |
 | Brightness PWM | PC6 / TIM3 CH1 |
+| UART control | PA9 USART1_TX / PA10 USART1_RX |
 
 ### 핀아웃 점검 결과
 
@@ -196,6 +197,33 @@ ADC: 12비트 → 8비트 변환, 샘플링 55.5 사이클, HALEx 캘리브레�
 - `PA0/PA5`는 기존 Hall 트리거 입력 자리였지만 현재는 사용하지 않으며 `GPIO_Analog`로 남겨 둡니다.
 - `PA13/PA14`는 SWD 디버그용으로 유지합니다.
 - `PC13/PC14` Column은 GPIO settle 특성을 고려해 스캔 시 약 2us settle delay를 둡니다.
+
+### UART 제어 프로토콜
+
+| 항목 | 내용 |
+|---|---|
+| 포트 | `USART1` |
+| 핀 | `PA9=TX`, `PA10=RX` |
+| 설정 | `38400 8N1` |
+| 수신 방식 | 1바이트 interrupt RX, CR/LF line parser |
+| 처리 방식 | 메인 루프에서 비차단 명령 처리 |
+
+- 명령은 ASCII 텍스트 한 줄이며 `\r`, `\n`, `\r\n` 중 하나로 종료합니다.
+- 응답은 `OK ...` 또는 `ERR ...` 형식입니다.
+- 현재는 백라이트 제어를 우선 구현했고, 같은 parser/namespace에 배터리 정보, 마우스 감도, 키맵, MP2672A charger status 명령을 확장할 수 있게 구성했습니다.
+
+| 명령 | 응답/동작 |
+|---|---|
+| `PING` | `OK PONG` |
+| `SCIO?` | `OK SCIO UART 1` |
+| `HELP` | 지원 명령 요약 |
+| `GET BL` 또는 `BL` | 현재 밝기 `OK BL <percent>` |
+| `SET BL 60` 또는 `BL 60` | 밝기 설정, 허용값 `20/40/60/80/100` |
+| `GET BAT` | 현재 INA219 기반 `V/I/P/B` 값 응답 |
+
+- UART로 밝기를 바꾸면 `Backlight_SetPercent()`를 호출하고 OLED에 `LIGHT xx%` 전용 큰 글씨 화면을 표시합니다.
+- UART RX/TX interrupt priority는 USB보다 낮게 설정하여 HID interrupt를 우선합니다.
+- PC 측 개발용 상세 프로토콜은 [UART_Protocol.md](/Users/eugenepark/ST_Project/superConsole_io_v01/UART_Protocol.md)를 참고합니다.
 
 ---
 
@@ -247,7 +275,8 @@ IO_Control_Process() — 메인 루프에서 블로킹 없이 반복
  ├─ [키보드 리포트] 변화 감지 시 EP1 IN 즉시 전송
  ├─ [ADC, 8ms 주기] Read_ADC() 4채널 → Gamepad 또는 Mouse 리포트 전송
  ├─ [배터리, 1000ms 주기] INA219 전압/전류 + MP2672AGD REG00H~04H 폴링
- └─ [OLED, 비차단] BatteryStatus_t를 page 단위 interrupt I2C 전송으로 표시
+ ├─ [OLED, 비차단] BatteryStatus_t를 page 단위 interrupt I2C 전송으로 표시
+ └─ [UART, 비차단] USART1 line command 처리
 ```
 
 ### 디바운스
@@ -374,6 +403,30 @@ Terminal → Run Task → Upload Debug
 - INA219 배터리 전압 기반 lookup table로 `percent`를 대략 추정
 - 전압 기반 추정은 부하/충전 상태에 영향을 받으므로 정확한 SOC가 아님
 - 정확한 SOC/잔여량 %가 필요하면 전류 적산 fuel gauge IC가 필요
+
+---
+
+### [feat] USART1 UART 제어 프로토콜 추가 (`uart_protocol.*`)
+
+**구성**
+- `PA9=USART1_TX`, `PA10=USART1_RX`
+- `38400 8N1`
+- RX는 1바이트 interrupt 수신, 명령 처리는 메인 루프에서 수행
+- 명령은 CR/LF로 끝나는 ASCII line protocol
+
+**현재 명령**
+- `PING`
+- `SCIO?`
+- `HELP`
+- `GET BL`, `BL`
+- `SET BL <20|40|60|80|100>`, `BL <20|40|60|80|100>`
+- `GET BAT`
+
+**확장 방향**
+- 배터리 상세 정보
+- 마우스 감도 설정
+- 키보드 키 배정
+- MP2672A charger status/fault 표시
 
 ---
 

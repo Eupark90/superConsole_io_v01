@@ -33,10 +33,16 @@
     * **Mouse Mode:** GP Y increases brightness, GP A decreases brightness
     * **Display:** shows a large `LIGHT xx%` overlay only when changed
 * **Mouse Sensitivity:**
-    * **Default:** 80%
+    * **Default:** 60%
     * **Range:** 20%, 40%, 60%, 80%, 100%
     * **Mouse Mode:** GP X decreases sensitivity, GP B increases sensitivity
     * **Display:** shows a large `SENS xx%` overlay only when changed
+* **UART Control (USART1):**
+    * **TX/RX:** PA9 / PA10
+    * **Format:** 38400 bps, 8 data bits, no parity, 1 stop bit
+    * **Protocol:** ASCII line commands ending with CR, LF, or CRLF
+    * **Implemented:** `PING`, `HELP`, `SCIO?`, `GET BL`, `SET BL <20|40|60|80|100>`, `BL <20|40|60|80|100>`, `GET BAT`
+    * **Planned Namespace:** battery, mouse sensitivity, keymap, and charger status commands
 
 ## 2. 키보드 매트릭스 설정 (14 Columns x 7 Rows)
 스캔 방식: Column에서 출력 신호를 보내고 Row에서 입력을 읽음.

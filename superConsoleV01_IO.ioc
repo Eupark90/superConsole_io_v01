@@ -84,6 +84,7 @@ NVIC.NonMaskableInt_IRQn=true\:0\:0\:false\:false\:true\:false\:false\:false
 NVIC.PendSV_IRQn=true\:0\:0\:false\:false\:true\:false\:false\:false
 NVIC.SVC_IRQn=true\:0\:0\:false\:false\:true\:false\:false\:true
 NVIC.SysTick_IRQn=true\:3\:0\:false\:false\:true\:false\:true\:false
+NVIC.USART1_IRQn=true\:2\:0\:false\:false\:true\:true\:true\:true
 NVIC.USB_IRQn=true\:0\:0\:false\:false\:true\:false\:true\:true
 PA0.Signal=GPIO_Analog
 PA1.Mode=IN1

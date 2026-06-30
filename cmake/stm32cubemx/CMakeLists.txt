@@ -36,6 +36,7 @@ set(MX_Application_Src
     ${CMAKE_CURRENT_SOURCE_DIR}/../../Core/Src/battery_monitor.c
     ${CMAKE_CURRENT_SOURCE_DIR}/../../Core/Src/oled_display.c
     ${CMAKE_CURRENT_SOURCE_DIR}/../../Core/Src/io_control.c
+    ${CMAKE_CURRENT_SOURCE_DIR}/../../Core/Src/uart_protocol.c
     ${CMAKE_CURRENT_SOURCE_DIR}/../../startup_stm32f072xb.s
 )
 

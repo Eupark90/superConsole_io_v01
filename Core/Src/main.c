@@ -26,6 +26,7 @@
 #include "battery_monitor.h"
 #include "io_control.h"
 #include "oled_display.h"
+#include "uart_protocol.h"
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -115,6 +116,7 @@ int main(void)
   BatteryMonitor_Init();
   OLED_Display_Init();
   IO_Control_Init();
+  UART_Protocol_Init();
   /* USER CODE END 2 */
 
   /* Infinite loop */
@@ -124,6 +126,7 @@ int main(void)
     IO_Control_Process();
     BatteryMonitor_Process();
     OLED_Display_Process();
+    UART_Protocol_Process();
     /* USER CODE END WHILE */
 
     /* USER CODE BEGIN 3 */
