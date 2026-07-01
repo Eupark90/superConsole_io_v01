@@ -9,7 +9,7 @@ extern UART_HandleTypeDef huart1;
 
 #define UART_RX_LINE_SIZE     64U
 #define UART_TX_LINE_SIZE     128U
-#define UART_BRIGHTNESS_MIN   20U
+#define UART_BRIGHTNESS_MIN   0U
 #define UART_BRIGHTNESS_MAX   100U
 
 static uint8_t rx_byte;
@@ -155,7 +155,7 @@ static void UART_SendStatus(void)
 
 static void UART_SendHelp(void)
 {
-    UART_SendText("OK CMDS PING HELP GET BL SET BL <20|40|60|80|100> BL <20|40|60|80|100> GET BAT\r\n");
+    UART_SendText("OK CMDS PING HELP GET BL SET BL <0|20|40|60|80|100> BL <0|20|40|60|80|100> GET BAT\r\n");
 }
 
 static void UART_SendBacklight(void)
@@ -196,7 +196,7 @@ static void HandleSetBacklight(char *value_token)
 {
     uint8_t percent = 0U;
     if (!ParsePercent(value_token, &percent)) {
-        UART_SendText("ERR RANGE BL 20/40/60/80/100\r\n");
+        UART_SendText("ERR RANGE BL 0/20/40/60/80/100\r\n");
         return;
     }
 

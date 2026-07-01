@@ -1,6 +1,6 @@
 #include "backlight_control.h"
 
-#define BACKLIGHT_MIN_PERCENT      20U
+#define BACKLIGHT_MIN_PERCENT      0U
 #define BACKLIGHT_MAX_PERCENT      100U
 #define BACKLIGHT_STEP_PERCENT     20U
 #define BACKLIGHT_DEFAULT_PERCENT  60U

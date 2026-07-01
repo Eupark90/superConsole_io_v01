@@ -81,7 +81,7 @@ HELP
 Response:
 
 ```text
-OK CMDS PING HELP GET BL SET BL <20|40|60|80|100> BL <20|40|60|80|100> GET BAT
+OK CMDS PING HELP GET BL SET BL <0|20|40|60|80|100> BL <0|20|40|60|80|100> GET BAT
 ```
 
 ### Get Backlight
@@ -117,7 +117,7 @@ BL 60
 Allowed values:
 
 ```text
-20 40 60 80 100
+0 20 40 60 80 100
 ```
 
 Successful response:
@@ -129,13 +129,14 @@ OK BL 60
 Invalid value response:
 
 ```text
-ERR RANGE BL 20/40/60/80/100
+ERR RANGE BL 0/20/40/60/80/100
 ```
 
 Side effect:
 
 - Updates PC6 TIM3_CH1 PWM duty.
 - Shows the `LIGHT xx%` large OLED overlay for about 1.6 seconds.
+- `0%` sets PWM duty to 0 and is used as the display backlight off state.
 
 ### Get Battery Summary
 
@@ -164,7 +165,7 @@ Current values come from INA219 measurements. `B` is a voltage-based firmware es
 | `ERR UNKNOWN` | Unknown command |
 | `ERR GET TARGET` | Unknown or missing `GET` target |
 | `ERR SET TARGET` | Unknown, missing, or malformed `SET` target |
-| `ERR RANGE BL 20/40/60/80/100` | Backlight value is outside allowed steps |
+| `ERR RANGE BL 0/20/40/60/80/100` | Backlight value is outside allowed steps |
 | `ERR LINE` | RX line overflow |
 
 ## Host-Side Recommendations

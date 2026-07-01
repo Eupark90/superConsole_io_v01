@@ -29,7 +29,7 @@
 * **LCD/OLED Brightness PWM:**
     * **PWM:** PC6 (TIM3 CH1, GPIO_AF0_TIM3)
     * **Default:** 60%
-    * **Range:** 20% to 100%, 20% step
+    * **Range:** 0%, 20%, 40%, 60%, 80%, 100%
     * **Mouse Mode:** GP Y increases brightness, GP A decreases brightness
     * **Display:** shows a large `LIGHT xx%` overlay only when changed
 * **Mouse Sensitivity:**
@@ -41,7 +41,7 @@
     * **TX/RX:** PA9 / PA10
     * **Format:** 38400 bps, 8 data bits, no parity, 1 stop bit
     * **Protocol:** ASCII line commands ending with CR, LF, or CRLF
-    * **Implemented:** `PING`, `HELP`, `SCIO?`, `GET BL`, `SET BL <20|40|60|80|100>`, `BL <20|40|60|80|100>`, `GET BAT`
+    * **Implemented:** `PING`, `HELP`, `SCIO?`, `GET BL`, `SET BL <0|20|40|60|80|100>`, `BL <0|20|40|60|80|100>`, `GET BAT`
     * **Planned Namespace:** battery, mouse sensitivity, keymap, and charger status commands
 
 ## 2. 키보드 매트릭스 설정 (14 Columns x 7 Rows)
