@@ -28,7 +28,7 @@
     * **Stored Fields:** `mp2672_registers_valid`, `mp2672_reg00` to `mp2672_reg04`
 * **LCD/OLED Brightness PWM:**
     * **PWM:** PC6 (TIM3 CH1, GPIO_AF0_TIM3)
-    * **Default:** 60%
+    * **Default:** 0%
     * **Range:** 0%, 20%, 40%, 60%, 80%, 100%
     * **Mouse Mode:** GP Y increases brightness, GP A decreases brightness
     * **Display:** shows a large `LIGHT xx%` overlay only when changed
